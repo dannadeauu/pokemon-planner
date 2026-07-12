@@ -827,3 +827,28 @@ h1 {
 .dex-cell.discovered {
   cursor: pointer;
 }
+
+
+.color-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.match-companion-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--input-bg);
+  color: var(--text);
+  opacity: 0.75;
+}
+
+.match-companion-btn.active {
+  background: var(--color-add);
+  color: #ffffff;
+  opacity: 1;
+}

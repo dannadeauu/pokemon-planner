@@ -93,6 +93,7 @@ const DEFAULT_SETTINGS = {
     done: "#6f8f52",
   },
   companion: "",
+  matchCompanion: false,
 };
 
 function loadSettings() {
@@ -187,11 +188,131 @@ function sizeCompanionImage() {
   else img.addEventListener("load", apply, { once: true });
 }
 
+// "match companion" accent mode: the accent color follows the companion's
+// dominant vibrant color (precomputed per sprite, darkened so white text
+// stays readable). Falls back to light gray with no companion, and switches
+// to the shiny palette when the companion goes shiny.
+const NO_COMPANION_ACCENT = "#b9bbc1";
+
+const COMPANION_ACCENTS = {
+  "pikachu": "#c28907",
+  "pikachu_shiny": "#ca8700",
+  "pikachu-f": "#c28907",
+  "pikachu-f_shiny": "#ca8700",
+  "pikachu-original": "#c28907",
+  "pikachu-original_shiny": "#b38b14",
+  "eevee": "#c7832e",
+  "eevee_shiny": "#8391ba",
+  "pidgey": "#b68a42",
+  "pidgey_shiny": "#969600",
+  "meowth": "#886600",
+  "meowth_shiny": "#984400",
+  "mimikyu": "#9e9358",
+  "mimikyu_shiny": "#b86e37",
+  "cosmog": "#273aa8",
+  "cosmog_shiny": "#273aa8",
+  "bidoof": "#c87e35",
+  "bidoof_shiny": "#a98c36",
+  "bulbasaur": "#2a9898",
+  "bulbasaur_shiny": "#6ca126",
+  "charmander": "#db7a28",
+  "charmander_shiny": "#cd8400",
+  "squirtle": "#4c96a8",
+  "squirtle_shiny": "#5f92d6",
+  "chikorita": "#58a715",
+  "chikorita_shiny": "#96961a",
+  "cyndaquil": "#d80000",
+  "cyndaquil_shiny": "#d80000",
+  "totodile": "#4b9ccd",
+  "totodile_shiny": "#3da772",
+  "treecko": "#7d9c1f",
+  "treecko_shiny": "#d83232",
+  "torchic": "#e56e19",
+  "torchic_shiny": "#9e9335",
+  "mudkip": "#309acf",
+  "mudkip_shiny": "#b972ee",
+  "turtwig": "#a3941c",
+  "turtwig_shiny": "#96961a",
+  "chimchar": "#cf8000",
+  "chimchar_shiny": "#d82057",
+  "piplup": "#207cd8",
+  "piplup_shiny": "#239fb1",
+  "snivy": "#00aa00",
+  "snivy_shiny": "#009898",
+  "tepig": "#df751c",
+  "tepig_shiny": "#ae9316",
+  "oshawott": "#0ea1b1",
+  "oshawott_shiny": "#577cd8",
+  "fennekin": "#f8521b",
+  "fennekin_shiny": "#f82e2e",
+  "froakie": "#4791c8",
+  "froakie_shiny": "#4e9c9c",
+  "rowlet": "#b38b63",
+  "rowlet_shiny": "#589e7b",
+  "litten": "#f8401b",
+  "litten_shiny": "#f8401b",
+  "popplio": "#375cb8",
+  "popplio_shiny": "#374ab8",
+  "grookey": "#5da234",
+  "grookey_shiny": "#819c32",
+  "scorbunny": "#f8651b",
+  "scorbunny_shiny": "#ca8200",
+  "sobble": "#4a98b7",
+  "sobble_shiny": "#00a1b0",
+  "flareon": "#f8652e",
+  "flareon_shiny": "#b7891b",
+  "vaporeon": "#369fbd",
+  "vaporeon_shiny": "#680c43",
+  "leafeon": "#2a9873",
+  "leafeon_shiny": "#00aa5d",
+  "espeon": "#bd81ae",
+  "espeon_shiny": "#4fa218",
+  "sylveon": "#e56e90",
+  "sylveon_shiny": "#4c9fba",
+  "umbreon": "#233648",
+  "umbreon_shiny": "#3781b8",
+  "glaceon": "#5d9a9a",
+  "glaceon_shiny": "#006dc8",
+  "jolteon": "#ac922c",
+  "jolteon_shiny": "#829a20"
+};
+
+const matchCompanionBtnEl = document.getElementById("match-companion-btn");
+
+function computeCompanionAccent() {
+  if (!settings.companion) return NO_COMPANION_ACCENT;
+  const key = settings.companion + (teamFullyEvolved ? "_shiny" : "");
+  return COMPANION_ACCENTS[key] || COMPANION_ACCENTS[settings.companion] || NO_COMPANION_ACCENT;
+}
+
+function updateMatchCompanionButton() {
+  matchCompanionBtnEl.classList.toggle("active", Boolean(settings.matchCompanion));
+}
+
+function applyMatchCompanion() {
+  if (!settings.matchCompanion) return;
+  const accent = computeCompanionAccent();
+  if (settings.colors.add !== accent) {
+    settings.colors.add = accent;
+    saveSettings(settings);
+    applyColors();
+  }
+}
+
 function initSettings() {
   applyTheme();
   applyColors();
   populateCompanionSelect();
   applyCompanion();
+  updateMatchCompanionButton();
+  applyMatchCompanion();
+
+  matchCompanionBtnEl.addEventListener("click", () => {
+    settings.matchCompanion = !settings.matchCompanion;
+    saveSettings(settings);
+    updateMatchCompanionButton();
+    applyMatchCompanion();
+  });
 
   settingsFabEl.addEventListener("click", () => settingsOverlayEl.classList.remove("hidden"));
   settingsCloseEl.addEventListener("click", () => settingsOverlayEl.classList.add("hidden"));
@@ -215,6 +336,10 @@ function initSettings() {
   };
   for (const [id, key] of Object.entries(colorInputs)) {
     document.getElementById(id).addEventListener("input", (e) => {
+      if (id === "color-add") {
+        settings.matchCompanion = false;
+        updateMatchCompanionButton();
+      }
       settings.colors[key] = e.target.value;
       saveSettings(settings);
       applyColors();
@@ -225,6 +350,7 @@ function initSettings() {
     settings.companion = companionSelectEl.value;
     saveSettings(settings);
     applyCompanion();
+    applyMatchCompanion();
   });
 
   window.addEventListener("resize", sizeCompanionImage);
@@ -290,6 +416,7 @@ async function fetchTodos() {
   const doneCount = todos.filter((t) => t.status === "done!").length;
   teamFullyEvolved = doneCount >= SHINY_COMPANION_THRESHOLD;
   applyCompanion();
+  applyMatchCompanion();
   maybeTriggerShinyFx();
 }
 
