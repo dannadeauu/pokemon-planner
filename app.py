@@ -200,6 +200,7 @@ def pokemon_for(row):
 
     return {
         "name": name,
+        "dex_id": dex_id,
         "shiny": shiny,
         "sprite": f"https://play.pokemonshowdown.com/sprites/{sprite_variant}/{name}.gif",
         "icon": icon_url,

@@ -197,6 +197,7 @@ function pokemonFor(todo) {
   const spriteVariant = shiny ? "ani-shiny" : "ani";
   return {
     name,
+    dex_id: dexId,
     shiny,
     sprite: `https://play.pokemonshowdown.com/sprites/${spriteVariant}/${name}.gif`,
     icon: `./sprites/icon/${dexId}${shiny ? "_shiny" : ""}.png`,
@@ -609,6 +610,8 @@ async function renderTeam(todos) {
       const img = document.createElement("img");
       img.alt = todo.pokemon.name;
       img.src = todo.pokemon.sprite;
+      img.style.cursor = "pointer";
+      img.addEventListener("click", () => openPokedex(todo.pokemon));
       slot.appendChild(img);
       entries.push({ slot, img });
     } else {
@@ -836,6 +839,194 @@ async function megaEvolve(id, variant) {
   storeMegaEvolve(id, variant);
   refresh();
 }
+
+// ---------------------------------------------------------------------------
+// Pokedex modal: tap a team pokemon to see its dex entry, base stats, and
+// latest pokedex description (fetched from PokeAPI, cached after first view).
+// ---------------------------------------------------------------------------
+
+const pokedexOverlayEl = document.getElementById("pokedex-overlay");
+const pokedexPanelEl = document.getElementById("pokedex-panel");
+const pokedexContentEl = document.getElementById("pokedex-content");
+const pokedexCloseEl = document.getElementById("pokedex-close");
+
+// Sparkle mark shown only for shiny pokemon; fill follows the text color.
+const SHINY_STAR_SVG =
+  '<svg class="shiny-star" viewBox="0 0 100 100" fill="currentColor" aria-label="shiny">' +
+  '<path d="M34 30 Q37.84 58.16 66 62 Q37.84 65.84 34 94 Q30.16 65.84 2 62 Q30.16 58.16 34 30 Z"/>' +
+  '<path d="M74 12 Q76.88 33.12 98 36 Q76.88 38.88 74 60 Q71.12 38.88 50 36 Q71.12 33.12 74 12 Z"/>' +
+  '<path d="M28 1 Q29.32 10.68 39 12 Q29.32 13.32 28 23 Q26.68 13.32 17 12 Q26.68 10.68 28 1 Z"/>' +
+  "</svg>";
+
+const dexDataCache = new Map();
+
+async function fetchDexData(dexId) {
+  if (dexDataCache.has(dexId)) return dexDataCache.get(dexId);
+  const poke = await (await fetch(`https://pokeapi.co/api/v2/pokemon/${dexId}`)).json();
+  const species = await (await fetch(poke.species.url)).json();
+  const english = species.flavor_text_entries.filter((e) => e.language.name === "en");
+  const flavor = english.length
+    ? english[english.length - 1].flavor_text.replace(/[\n\f\r]+/g, " ")
+    : "";
+  const genusEntry = species.genera.find((g) => g.language.name === "en");
+  const data = {
+    name: poke.name,
+    nationalNo: species.id,
+    types: poke.types.map((t) => t.type.name),
+    genus: genusEntry ? genusEntry.genus : "",
+    heightM: poke.height / 10,
+    weightKg: poke.weight / 10,
+    abilities: poke.abilities,
+    stats: poke.stats,
+    flavor,
+  };
+  dexDataCache.set(dexId, data);
+  return data;
+}
+
+const STAT_LABELS = {
+  hp: "HP",
+  attack: "Attack",
+  defense: "Defense",
+  "special-attack": "Sp. Atk",
+  "special-defense": "Sp. Def",
+  speed: "Speed",
+};
+
+// Level-100 stat ranges, same formulas pokemondb uses (0 vs 31 IV, 0 vs 252 EV).
+function statMin(name, base) {
+  return name === "hp" ? 2 * base + 110 : Math.floor((2 * base + 5) * 0.9);
+}
+
+function statMax(name, base) {
+  return name === "hp" ? 2 * base + 204 : Math.floor((2 * base + 99) * 1.1);
+}
+
+function statBarColor(value) {
+  if (value < 30) return "#f34444";
+  if (value < 60) return "#ff7f0f";
+  if (value < 90) return "#ffdd57";
+  if (value < 120) return "#a0e515";
+  if (value < 150) return "#23cd5e";
+  return "#00c2b8";
+}
+
+function formatHeight(m) {
+  const totalInches = Math.round(m * 39.3701);
+  const feet = Math.floor(totalInches / 12);
+  const inches = String(totalInches % 12).padStart(2, "0");
+  return `${m.toFixed(1)} m (${feet}’${inches}”)`;
+}
+
+function formatWeight(kg) {
+  return `${kg.toFixed(1)} kg (${(kg * 2.20462).toFixed(1)} lbs)`;
+}
+
+function pokedexDisplayName(apiName) {
+  const parts = apiName.split("-");
+  if (parts.includes("mega")) {
+    const rest = parts.filter((p, i) => i > 0 && p !== "mega");
+    return ["mega", parts[0], ...rest].join(" ");
+  }
+  return parts.join(" ");
+}
+
+function renderPokedex(pokemon, d) {
+  const typeIcons = d.types
+    .map(
+      (t) =>
+        `<img class="type-icon" src="https://play.pokemonshowdown.com/sprites/types/${t[0].toUpperCase() + t.slice(1)}.png" alt="${t}">`
+    )
+    .join(" ");
+
+  const numbered = d.abilities
+    .filter((a) => !a.is_hidden)
+    .map((a, i) => `${i + 1}. ${a.ability.name.replace(/-/g, " ")}`);
+  const hidden = d.abilities
+    .filter((a) => a.is_hidden)
+    .map((a) => `${a.ability.name.replace(/-/g, " ")} (hidden ability)`);
+  const abilityLines = [...numbered, ...hidden];
+
+  let statsRows = "";
+  let total = 0;
+  for (const s of d.stats) {
+    const base = s.base_stat;
+    total += base;
+    const width = Math.min(100, (base / 255) * 100);
+    statsRows +=
+      `<div class="stat-row">` +
+      `<span class="stat-name">${STAT_LABELS[s.stat.name] || s.stat.name}</span>` +
+      `<span class="stat-val">${base}</span>` +
+      `<span class="stat-bar-track"><span class="stat-bar" style="width:${width.toFixed(1)}%;background:${statBarColor(base)}"></span></span>` +
+      `<span class="stat-minmax">${statMin(s.stat.name, base)}</span>` +
+      `<span class="stat-minmax">${statMax(s.stat.name, base)}</span>` +
+      `</div>`;
+  }
+  statsRows +=
+    `<div class="stat-row total">` +
+    `<span class="stat-name">Total</span>` +
+    `<span class="stat-val">${total}</span>` +
+    `<span class="stat-bar-track"></span>` +
+    `<span class="stat-minmax">Min</span>` +
+    `<span class="stat-minmax">Max</span>` +
+    `</div>`;
+
+  pokedexContentEl.innerHTML =
+    `<div class="pokedex-hero">` +
+    `<div class="pokedex-gif-box"><img src="${pokemon.sprite}" alt="${pokemon.name}"></div>` +
+    `<div class="pokedex-head">` +
+    `<h2 class="pokedex-title">${pokedexDisplayName(d.name)}${pokemon.shiny ? SHINY_STAR_SVG : ""}</h2>` +
+    `<div class="pokedex-info">` +
+    `<div>national no: ${d.nationalNo}</div>` +
+    `<div>type: ${typeIcons}</div>` +
+    `<div>species: ${d.genus.toLowerCase()}</div>` +
+    `<div>height: ${formatHeight(d.heightM)}</div>` +
+    `<div>weight: ${formatWeight(d.weightKg)}</div>` +
+    `<div>abilities: ${abilityLines.join("<br>")}</div>` +
+    `</div></div></div>` +
+    `<p class="pokedex-desc">${d.flavor.toLowerCase()}</p>` +
+    `<div class="pokedex-stats"><h3>Base stats</h3>${statsRows}</div>`;
+}
+
+function dexIdFromPokemon(pokemon) {
+  if (pokemon.dex_id) return pokemon.dex_id;
+  // Older server payloads lack dex_id; the icon path always carries it.
+  const match = (pokemon.icon || "").match(/\/icon\/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+async function openPokedex(pokemon) {
+  // Backdrop keeps the full team blur exactly as it is on the card; only the
+  // tapped pokemon's gif is shown crisp (no other gifs, no empty slots).
+  const oldBlur = pokedexPanelEl.querySelector(".team-blur-bg");
+  if (oldBlur) oldBlur.remove();
+  const blurClone = teamBlurBgEl.cloneNode(true);
+  blurClone.removeAttribute("id");
+  pokedexPanelEl.prepend(blurClone);
+
+  pokedexContentEl.innerHTML = '<p class="pokedex-loading">loading...</p>';
+  pokedexOverlayEl.classList.remove("hidden");
+
+  try {
+    const data = await fetchDexData(dexIdFromPokemon(pokemon));
+    renderPokedex(pokemon, data);
+  } catch {
+    pokedexContentEl.innerHTML =
+      "<p class=\"pokedex-loading\">couldn't load pokedex data - check your connection.</p>";
+  }
+}
+
+function closePokedex() {
+  pokedexOverlayEl.classList.add("hidden");
+}
+
+pokedexCloseEl.addEventListener("click", closePokedex);
+pokedexOverlayEl.addEventListener("click", (e) => {
+  if (e.target === pokedexOverlayEl) closePokedex();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closePokedex();
+});
 
 formEl.addEventListener("submit", (e) => {
   e.preventDefault();
