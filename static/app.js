@@ -331,6 +331,7 @@ async function renderTeam(todos) {
     const todo = todos[i];
     if (todo) {
       slot.className = "team-slot";
+      registerDiscovery(todo.pokemon);
       const img = document.createElement("img");
       img.alt = todo.pokemon.name;
       img.src = todo.pokemon.sprite;
@@ -771,6 +772,153 @@ pokedexOverlayEl.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closePokedex();
 });
+
+function dexIconUrl(dex, shiny) {
+  return `/sprites/icon/${dex}.png${shiny ? "?shiny=1" : ""}`;
+}
+
+async function loadDexEntries() {
+  const res = await fetch("/api/pokedex");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Pokedex page: swipe left to browse every pokemon in the roster. Everything
+// starts as a dark silhouette and fills with color once that form has
+// appeared on the team. Shiny sightings register in both tabs. Discoveries
+// persist on this device.
+// ---------------------------------------------------------------------------
+
+const dexPageEl = document.getElementById("dex-page");
+const appPageEl = document.querySelector(".app.page");
+const dexGridEl = document.getElementById("dex-grid");
+
+const DEX_KEY = "todo-app-pokedex";
+
+function loadDexDiscoveries() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DEX_KEY));
+    if (stored && stored.all && stored.shiny) return stored;
+  } catch (e) {
+    // fall through to a fresh dex
+  }
+  return { all: {}, shiny: {} };
+}
+
+const dexDiscoveries = loadDexDiscoveries();
+
+function saveDexDiscoveries() {
+  localStorage.setItem(DEX_KEY, JSON.stringify(dexDiscoveries));
+}
+
+function registerDiscovery(pokemon) {
+  const key = String(dexIdFromPokemon(pokemon));
+  let changed = false;
+  if (!dexDiscoveries.all[key]) {
+    dexDiscoveries.all[key] = true;
+    changed = true;
+  }
+  if (pokemon.shiny && !dexDiscoveries.shiny[key]) {
+    dexDiscoveries.shiny[key] = true;
+    changed = true;
+  }
+  if (changed) saveDexDiscoveries();
+}
+
+let dexEntriesPromise = null;
+
+function getDexEntries() {
+  if (!dexEntriesPromise) dexEntriesPromise = loadDexEntries();
+  return dexEntriesPromise;
+}
+
+let dexActiveTab = "all";
+
+async function renderDexGrid() {
+  const entries = await getDexEntries();
+  const shiny = dexActiveTab === "shiny";
+  const seen = dexDiscoveries[shiny ? "shiny" : "all"];
+  dexGridEl.innerHTML = "";
+  for (const entry of entries) {
+    const discovered = Boolean(seen[String(entry.icon_dex)]);
+    const cell = document.createElement("div");
+    cell.className = "dex-cell " + (discovered ? "discovered" : "undiscovered");
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.src = dexIconUrl(entry.icon_dex, shiny);
+    img.alt = discovered ? entry.name : "undiscovered";
+    const num = document.createElement("span");
+    num.className = "dex-num";
+    num.textContent = entry.label;
+    cell.append(img, num);
+    if (discovered) {
+      cell.addEventListener("click", () =>
+        openPokedex({
+          name: entry.name,
+          dex_id: entry.icon_dex,
+          shiny,
+          sprite: `https://play.pokemonshowdown.com/sprites/${shiny ? "ani-shiny" : "ani"}/${entry.name}.gif`,
+          icon: dexIconUrl(entry.icon_dex, shiny),
+        })
+      );
+    }
+    dexGridEl.appendChild(cell);
+  }
+}
+
+let currentPage = "main";
+
+function showPage(page) {
+  currentPage = page;
+  if (page === "dex") {
+    appPageEl.classList.add("off-left");
+    dexPageEl.classList.remove("off-right");
+    renderDexGrid();
+  } else {
+    appPageEl.classList.remove("off-left");
+    dexPageEl.classList.add("off-right");
+  }
+}
+
+let swipeStartX = null;
+let swipeStartY = null;
+let swipeEligible = false;
+
+document.addEventListener(
+  "touchstart",
+  (e) => {
+    const touch = e.touches[0];
+    swipeStartX = touch.clientX;
+    swipeStartY = touch.clientY;
+    swipeEligible = !e.target.closest(
+      ".drag-handle, input, select, .settings-overlay, .pokedex-overlay"
+    );
+  },
+  { passive: true }
+);
+
+document.addEventListener(
+  "touchend",
+  (e) => {
+    if (!swipeEligible || swipeStartX === null) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeStartX;
+    const dy = touch.clientY - swipeStartY;
+    swipeStartX = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    if (dx < 0 && currentPage === "main") showPage("dex");
+    else if (dx > 0 && currentPage === "dex") showPage("main");
+  },
+  { passive: true }
+);
+
+for (const tab of document.querySelectorAll(".dex-tab")) {
+  tab.addEventListener("click", () => {
+    dexActiveTab = tab.dataset.tab;
+    document.querySelectorAll(".dex-tab").forEach((b) => b.classList.toggle("active", b === tab));
+    renderDexGrid();
+  });
+}
 
 formEl.addEventListener("submit", (e) => {
   e.preventDefault();

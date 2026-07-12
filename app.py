@@ -388,6 +388,40 @@ def sprite_item(item_slug):
     return send_file(cropped_item_path(item_slug), mimetype="image/png")
 
 
+@app.route("/api/pokedex", methods=["GET"])
+def pokedex_entries():
+    """Every unique form in the roster, ordered by national dex number with
+    mega forms right after their base form."""
+    entries = {}
+    for family_index, (dex_ids, names) in enumerate(POKEMON_FAMILIES):
+        for stage in range(3):
+            key = str(dex_ids[stage])
+            if key not in entries:
+                entries[key] = {
+                    "icon_dex": dex_ids[stage],
+                    "name": names[stage],
+                    "label": f"{dex_ids[stage]:04d}",
+                    "sort": dex_ids[stage] * 10,
+                }
+        for variant_index, (slug, mega_dex, _stone) in enumerate(MEGA_DATA.get(family_index, [])):
+            key = str(mega_dex)
+            if key not in entries:
+                base = dex_ids[2]
+                if slug.endswith("megax"):
+                    suffix = " M-X"
+                elif slug.endswith("megay"):
+                    suffix = " M-Y"
+                else:
+                    suffix = " M"
+                entries[key] = {
+                    "icon_dex": mega_dex,
+                    "name": slug,
+                    "label": f"{base:04d}{suffix}",
+                    "sort": base * 10 + 1 + variant_index,
+                }
+    return jsonify(sorted(entries.values(), key=lambda e: e["sort"]))
+
+
 @app.route("/sprites/companion/<name>.gif")
 def sprite_companion(name):
     if name not in COMPANION_CROP_OVERRIDES:
