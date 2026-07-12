@@ -720,6 +720,8 @@ h1 {
   position: fixed;
   inset: 0;
   transition: transform 0.35s ease;
+  touch-action: pan-y;
+  will-change: transform;
 }
 
 .page.off-left {

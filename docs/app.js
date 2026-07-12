@@ -1313,28 +1313,67 @@ async function renderDexGrid() {
 
 let currentPage = "main";
 
-function showPage(page) {
-  currentPage = page;
-  if (page === "dex") {
-    appPageEl.classList.add("off-left");
-    dexPageEl.classList.remove("off-right");
-    renderDexGrid();
-  } else {
-    appPageEl.classList.remove("off-left");
-    dexPageEl.classList.add("off-right");
-  }
-}
+// ---- interactive swipe between the list and the pokedex ----
+// The pages track the finger while it moves; on release they settle to
+// whichever page is closer, or to the one a quick flick points at.
+
+const PAGE_OFFSET = 1.02; // keep in sync with .off-left / .off-right in the CSS
 
 let swipeStartX = null;
 let swipeStartY = null;
 let swipeEligible = false;
+let swipeAxis = null; // null until the gesture locks to "h" or "v"
+let swipeOffset = 0;
+let swipeSamples = [];
+let pagesSettling = false;
+
+function pageWidth() {
+  return window.innerWidth * PAGE_OFFSET;
+}
+
+function positionPages(offset) {
+  const base = currentPage === "main" ? 0 : -pageWidth();
+  appPageEl.style.transition = "none";
+  dexPageEl.style.transition = "none";
+  appPageEl.style.transform = `translateX(${base + offset}px)`;
+  dexPageEl.style.transform = `translateX(${base + offset + pageWidth()}px)`;
+}
+
+function settlePages(commit, velocity) {
+  const target = commit ? (currentPage === "main" ? "dex" : "main") : currentPage;
+  const width = pageWidth();
+  const from = (currentPage === "main" ? 0 : -width) + swipeOffset;
+  const to = target === "main" ? 0 : -width;
+  // Finish at the fling speed (but never crawl), so the release feels
+  // continuous with the drag instead of restarting a canned animation.
+  const speed = Math.max(Math.abs(velocity), 0.6); // px per ms
+  const duration = Math.round(Math.min(Math.max(Math.abs(to - from) / speed, 120), 340));
+  swipeOffset = 0;
+  pagesSettling = true;
+  const ease = `transform ${duration}ms cubic-bezier(0.25, 0.8, 0.4, 1)`;
+  appPageEl.style.transition = ease;
+  dexPageEl.style.transition = ease;
+  appPageEl.style.transform = "";
+  dexPageEl.style.transform = "";
+  currentPage = target;
+  appPageEl.classList.toggle("off-left", target === "dex");
+  dexPageEl.classList.toggle("off-right", target !== "dex");
+  setTimeout(() => {
+    appPageEl.style.transition = "";
+    dexPageEl.style.transition = "";
+    pagesSettling = false;
+  }, duration + 60);
+}
 
 document.addEventListener(
   "touchstart",
   (e) => {
+    if (e.touches.length > 1 || pagesSettling) return;
     const touch = e.touches[0];
     swipeStartX = touch.clientX;
     swipeStartY = touch.clientY;
+    swipeAxis = null;
+    swipeSamples = [{ t: e.timeStamp, x: touch.clientX }];
     swipeEligible = !e.target.closest(
       ".drag-handle, input, select, .settings-overlay, .pokedex-overlay"
     );
@@ -1343,16 +1382,76 @@ document.addEventListener(
 );
 
 document.addEventListener(
-  "touchend",
+  "touchmove",
   (e) => {
     if (!swipeEligible || swipeStartX === null) return;
-    const touch = e.changedTouches[0];
+    const touch = e.touches[0];
     const dx = touch.clientX - swipeStartX;
     const dy = touch.clientY - swipeStartY;
+    if (swipeAxis === null) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      swipeAxis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      // render the grid up front so it's populated while it slides in
+      if (swipeAxis === "h" && currentPage === "main") renderDexGrid();
+    }
+    if (swipeAxis !== "h") return;
+    e.preventDefault();
+    const width = pageWidth();
+    let offset =
+      currentPage === "main"
+        ? Math.max(Math.min(dx, 0), -width)
+        : Math.min(Math.max(dx, 0), width);
+    if (offset === 0 && dx !== 0) {
+      // rubber-band when there is no page in that direction
+      offset = Math.max(Math.min(dx / 4, 48), -48);
+    }
+    swipeOffset = offset;
+    positionPages(offset);
+    swipeSamples.push({ t: e.timeStamp, x: touch.clientX });
+    if (swipeSamples.length > 8) swipeSamples.shift();
+  },
+  { passive: false }
+);
+
+document.addEventListener(
+  "touchend",
+  (e) => {
+    if (swipeStartX === null) return;
+    const dragged = swipeEligible && swipeAxis === "h";
+    const samples = swipeSamples;
     swipeStartX = null;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
-    if (dx < 0 && currentPage === "main") showPage("dex");
-    else if (dx > 0 && currentPage === "dex") showPage("main");
+    swipeStartY = null;
+    swipeAxis = null;
+    swipeSamples = [];
+    if (!dragged) return;
+    const touch = e.changedTouches[0];
+    const now = e.timeStamp;
+    // velocity over the last ~120ms (px/ms, negative = leftward)
+    const recent = samples.filter((s) => now - s.t <= 120);
+    const first = recent[0];
+    const velocity =
+      first && now > first.t ? (touch.clientX - first.x) / (now - first.t) : 0;
+    const toward = currentPage === "main" ? -1 : 1; // direction that changes page
+    const progress = (swipeOffset * toward) / pageWidth();
+    const commit =
+      progress > 0 &&
+      velocity * toward > -0.3 &&
+      (progress > 0.5 || velocity * toward > 0.3);
+    settlePages(commit, velocity);
+  },
+  { passive: true }
+);
+
+document.addEventListener(
+  "touchcancel",
+  () => {
+    if (swipeStartX !== null && swipeEligible && swipeAxis === "h") {
+      settlePages(false, 0);
+    }
+    swipeStartX = null;
+    swipeStartY = null;
+    swipeAxis = null;
+    swipeSamples = [];
   },
   { passive: true }
 );
