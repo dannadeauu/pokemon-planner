@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "todo-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["app.py"],
+      "port": 5050
+    },
+    {
+      "name": "pwa",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "5051", "--directory", "docs"],
+      "port": 5051
+    }
+  ]
+}

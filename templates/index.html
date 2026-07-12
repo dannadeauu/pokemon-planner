@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>My Team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="app">
+    <div class="app-header">
+      <div class="team-card">
+        <div class="team-blur-bg" id="team-blur-bg"></div>
+        <div class="team-grid" id="team-grid"></div>
+      </div>
+
+      <h1>my team</h1>
+      <p class="date-text" id="date-text"></p>
+      <p class="progress-text" id="progress-text">list progress: 0%</p>
+
+      <div class="add-wrap">
+        <div class="companion-row empty" id="companion-row">
+          <img class="companion-img" id="companion-img" alt="" />
+          <img class="shiny-fx" id="shiny-fx" alt="" />
+        </div>
+
+        <form id="add-form" class="add-row">
+          <input type="text" id="new-item" placeholder="add a task…" autocomplete="off" required />
+          <button type="submit">add</button>
+        </form>
+      </div>
+
+      <div class="header-fade"></div>
+    </div>
+
+    <div class="list-scroll">
+      <ul id="todo-list" class="todo-list"></ul>
+    </div>
+  </div>
+
+  <button class="settings-fab" id="settings-fab" aria-label="Settings">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </button>
+
+  <div class="settings-overlay hidden" id="settings-overlay">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h2>settings</h2>
+        <button class="settings-close" id="settings-close">✕</button>
+      </div>
+
+      <div class="settings-section">
+        <span class="settings-label">theme</span>
+        <div class="theme-toggle">
+          <button class="theme-btn" data-theme="light">light</button>
+          <button class="theme-btn" data-theme="dark">dark</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <span class="settings-label">colors</span>
+        <div class="color-row">
+          <label for="color-add">accent color</label>
+          <input type="color" id="color-add" />
+        </div>
+        <div class="color-row">
+          <label for="color-not-started">not started</label>
+          <input type="color" id="color-not-started" />
+        </div>
+        <div class="color-row">
+          <label for="color-in-progress">in progress...</label>
+          <input type="color" id="color-in-progress" />
+        </div>
+        <div class="color-row">
+          <label for="color-done">done!</label>
+          <input type="color" id="color-done" />
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <span class="settings-label">companion</span>
+        <select class="companion-select" id="companion-select"></select>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
