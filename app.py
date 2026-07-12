@@ -271,7 +271,7 @@ def cropped_item_path(item_slug):
 # still plays correctly, just without the wasted margin.
 COMPANION_GIF_BASE = "https://play.pokemonshowdown.com/sprites/gen5ani"
 COMPANION_GIF_SHINY_BASE = "https://play.pokemonshowdown.com/sprites/gen5ani-shiny"
-COMPANION_CROP_OVERRIDES = {"grookey", "scorbunny", "sobble"}
+COMPANION_CROP_OVERRIDES = {"grookey", "scorbunny", "sobble", "froakie"}
 
 
 def cropped_companion_gif_path(name, shiny=False):

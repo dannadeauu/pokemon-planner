@@ -351,7 +351,7 @@ const COMPANION_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/gen5ani"
 const COMPANION_SPRITE_SHINY_BASE = "https://play.pokemonshowdown.com/sprites/gen5ani-shiny";
 // These sit on a much bigger canvas than the other companions, so they ship
 // pre-cropped as static assets to match everyone else's sizing.
-const COMPANION_CROP_OVERRIDES = new Set(["grookey", "scorbunny", "sobble"]);
+const COMPANION_CROP_OVERRIDES = new Set(["grookey", "scorbunny", "sobble", "froakie"]);
 
 function companionSpriteUrl(name, shiny) {
   if (COMPANION_CROP_OVERRIDES.has(name)) {
@@ -439,9 +439,21 @@ function applyCompanion() {
   sizeCompanionImage();
 }
 
+// Species whose sprites read small at the standard size.
+const COMPANION_SCALE_OVERRIDES = {
+  mimikyu: 1.5,
+  cosmog: 1.5,
+  rowlet: 1.5,
+  flareon: 1.5,
+  leafeon: 1.5,
+  espeon: 1.5,
+  glaceon: 1.5,
+};
+
 function sizeCompanionImage() {
   if (!settings.companion) return;
-  const targetWidth = addButtonEl.getBoundingClientRect().width * 0.75;
+  const scale = COMPANION_SCALE_OVERRIDES[settings.companion] || 1;
+  const targetWidth = addButtonEl.getBoundingClientRect().width * 0.75 * scale;
   const img = companionImgEl;
   const apply = () => {
     if (!img.naturalWidth || !img.naturalHeight) return;
@@ -756,19 +768,44 @@ function beginEditText(li, textEl, todo) {
 }
 
 // Touch-friendly drag-to-reorder using Pointer Events (HTML5 drag-and-drop
-// doesn't work on mobile browsers). The dragged row swaps live with whichever
-// neighbor its pointer has crossed the midpoint of.
+// doesn't work on mobile browsers). While dragging, a ghost of the row
+// follows the pointer and an accent-colored line marks where it will land.
 let dragging = null;
+let dragGhost = null;
+let dropIndicator = null;
+let dragStartPointerY = 0;
 
 function attachDragHandlers(handle, li) {
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     dragging = li;
+    dragStartPointerY = e.clientY;
+
+    const rect = li.getBoundingClientRect();
+    dragGhost = li.cloneNode(true);
+    // cloneNode misses the select's live value; restore it so the status
+    // pill keeps its color and label on the ghost
+    const liSelect = li.querySelector(".status-select");
+    const ghostSelect = dragGhost.querySelector(".status-select");
+    if (liSelect && ghostSelect) {
+      ghostSelect.value = liSelect.value;
+      ghostSelect.dataset.status = liSelect.dataset.status;
+    }
+    dragGhost.classList.add("drag-ghost");
+    dragGhost.style.left = `${rect.left}px`;
+    dragGhost.style.top = `${rect.top}px`;
+    dragGhost.style.width = `${rect.width}px`;
+    document.body.appendChild(dragGhost);
+
+    dropIndicator = document.createElement("div");
+    dropIndicator.className = "drop-indicator";
+    listEl.insertBefore(dropIndicator, li);
+
     li.classList.add("dragging");
     try {
       handle.setPointerCapture(e.pointerId);
-    } catch {
-      // Ignore - dragging still works via document-level listeners below.
+    } catch (err) {
+      // Ignore - dragging still works via the listeners below.
     }
     handle.addEventListener("pointermove", onDragMove);
     handle.addEventListener("pointerup", onDragEnd, { once: true });
@@ -778,34 +815,33 @@ function attachDragHandlers(handle, li) {
 
 function onDragMove(e) {
   if (!dragging) return;
+  dragGhost.style.transform = `translateY(${e.clientY - dragStartPointerY}px)`;
+
   const pointerY = e.clientY;
   const items = Array.from(listEl.querySelectorAll(".todo-item")).filter((el) => el !== dragging);
-
-  // Recompute the full target position each move (rather than swapping one
-  // step at a time), so a fast swipe or a coalesced batch of pointermove
-  // events still lands the dragged row in the right place.
   let target = null;
   for (const item of items) {
     const rect = item.getBoundingClientRect();
-    const mid = rect.top + rect.height / 2;
-    if (pointerY < mid) {
+    if (pointerY < rect.top + rect.height / 2) {
       target = item;
       break;
     }
   }
-
   if (target) {
-    if (target.previousElementSibling !== dragging) {
-      listEl.insertBefore(dragging, target);
-    }
-  } else if (listEl.lastElementChild !== dragging) {
-    listEl.appendChild(dragging);
+    listEl.insertBefore(dropIndicator, target);
+  } else {
+    listEl.appendChild(dropIndicator);
   }
 }
 
 function onDragEnd() {
   if (!dragging) return;
+  listEl.insertBefore(dragging, dropIndicator);
+  dropIndicator.remove();
+  dragGhost.remove();
   dragging.classList.remove("dragging");
+  dropIndicator = null;
+  dragGhost = null;
   const order = Array.from(listEl.querySelectorAll(".todo-item")).map((el) => Number(el.dataset.id));
   dragging = null;
   reorderTodos(order);

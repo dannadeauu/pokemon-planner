@@ -25,7 +25,7 @@ DOCS = Path(__file__).resolve().parent.parent / "docs"
 MANIFEST = json.loads((Path(__file__).resolve().parent / "assets_manifest.json").read_text())
 ICON_DEX_IDS = MANIFEST["icon_dex_ids"]
 MEGA_STONES = MANIFEST["stones"]
-CROPPED_COMPANIONS = ("grookey", "scorbunny", "sobble")
+CROPPED_COMPANIONS = ("grookey", "scorbunny", "sobble", "froakie")
 
 ICON_BASE = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/"
