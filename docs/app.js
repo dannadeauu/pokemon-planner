@@ -972,10 +972,10 @@ function renderPokedex(pokemon, d) {
     `</div>`;
 
   pokedexContentEl.innerHTML =
+    `<h2 class="pokedex-title">${pokedexDisplayName(d.name)}${pokemon.shiny ? SHINY_STAR_SVG : ""}</h2>` +
     `<div class="pokedex-hero">` +
     `<div class="pokedex-gif-box"><img src="${pokemon.sprite}" alt="${pokemon.name}"></div>` +
     `<div class="pokedex-head">` +
-    `<h2 class="pokedex-title">${pokedexDisplayName(d.name)}${pokemon.shiny ? SHINY_STAR_SVG : ""}</h2>` +
     `<div class="pokedex-info">` +
     `<div>national no: ${d.nationalNo}</div>` +
     `<div>type: ${typeIcons}</div>` +
