@@ -83,6 +83,16 @@ function companionSpriteUrl(name, shiny) {
   return `${base}/${name}.gif`;
 }
 
+// iOS can leave the document panned after a bottom sheet closes (keyboard or
+// scroll chaining), which lingers as a black bar above the fixed pages.
+// Force the viewport back to the top whenever an overlay closes.
+function resetViewportScroll() {
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
 const SETTINGS_KEY = "todo-app-settings";
 const DEFAULT_SETTINGS = {
   theme: "light",
@@ -314,10 +324,14 @@ function initSettings() {
     applyMatchCompanion();
   });
 
+  const closeSettings = () => {
+    settingsOverlayEl.classList.add("hidden");
+    resetViewportScroll();
+  };
   settingsFabEl.addEventListener("click", () => settingsOverlayEl.classList.remove("hidden"));
-  settingsCloseEl.addEventListener("click", () => settingsOverlayEl.classList.add("hidden"));
+  settingsCloseEl.addEventListener("click", closeSettings);
   settingsOverlayEl.addEventListener("click", (e) => {
-    if (e.target === settingsOverlayEl) settingsOverlayEl.classList.add("hidden");
+    if (e.target === settingsOverlayEl) closeSettings();
   });
 
   for (const btn of document.querySelectorAll(".theme-btn")) {
@@ -926,6 +940,7 @@ async function openPokedex(pokemon) {
 
 function closePokedex() {
   pokedexOverlayEl.classList.add("hidden");
+  resetViewportScroll();
 }
 
 pokedexCloseEl.addEventListener("click", closePokedex);
