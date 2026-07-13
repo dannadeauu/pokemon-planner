@@ -1543,18 +1543,28 @@ const parkFriendsEl = document.getElementById("park-friends");
 const copyLinkInlineEl = document.getElementById("copy-link-inline");
 const copyLinkBlockEl = document.getElementById("copy-link-block");
 const friendsEmptyEl = document.getElementById("friends-empty");
+const accountBtnEl = document.getElementById("account-btn");
+const friendsAccountViewEl = document.getElementById("friends-account-view");
+const accountBackEl = document.getElementById("account-back");
+const accountNicknameFormEl = document.getElementById("account-nickname-form");
+const accountNicknameInputEl = document.getElementById("account-nickname-input");
+const accountErrorEl = document.getElementById("account-error");
+const googleSigninBtnEl = document.getElementById("google-signin-btn");
+const accountSignedinEl = document.getElementById("account-signedin");
+const accountEmailEl = document.getElementById("account-email");
+const googleSignoutBtnEl = document.getElementById("google-signout-btn");
 
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
-async function supabaseRpc(fn, args) {
+async function supabaseRpc(fn, args, accessToken) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${accessToken || SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify(args),
   });
@@ -1825,6 +1835,7 @@ function showFormError(el, msg) {
 function renderFriendsMenu() {
   friendsHomeViewEl.classList.remove("hidden");
   friendsNicknameViewEl.classList.add("hidden");
+  friendsAccountViewEl.classList.add("hidden");
   friendCodeErrorEl.classList.add("hidden");
   nicknameErrorEl.classList.add("hidden");
   const hasTrainer = Boolean(trainer);
@@ -1865,25 +1876,16 @@ friendsNicknameViewEl.addEventListener("submit", async (e) => {
   const nickname = nicknameInputEl.value.trim();
   if (!nickname) return;
   nicknameErrorEl.classList.add("hidden");
-  if (supabaseConfigured()) {
-    const btn = friendsNicknameViewEl.querySelector("button");
-    btn.disabled = true;
-    try {
-      const created = await supabaseRpc("create_trainer", { p_nickname: nickname });
-      trainer = { nickname, code: created.code, secret: created.secret };
-    } catch (err) {
-      showFormError(nicknameErrorEl, "couldn't reach the park - try again");
-      return;
-    } finally {
-      btn.disabled = false;
-    }
-  } else {
-    trainer = { nickname, code: trainer ? trainer.code : generateTrainerCode() };
+  const btn = friendsNicknameViewEl.querySelector("button");
+  btn.disabled = true;
+  const error = await saveNickname(nickname);
+  btn.disabled = false;
+  if (error) {
+    showFormError(nicknameErrorEl, error);
+    return;
   }
-  saveTrainer();
   nicknameInputEl.blur();
   renderFriendsMenu();
-  schedulePushTeam();
 });
 
 friendCodeFormEl.addEventListener("submit", async (e) => {
@@ -1957,6 +1959,216 @@ async function copyAppLink(btn) {
 copyLinkInlineEl.addEventListener("click", () => copyAppLink(copyLinkInlineEl));
 copyLinkBlockEl.addEventListener("click", () => copyAppLink(copyLinkBlockEl));
 
+// ---- account: nickname changes + google sign-in backup ----
+
+const AUTH_KEY = "todo-app-auth";
+
+function loadAuthSession() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AUTH_KEY));
+    if (stored && stored.access_token) return stored;
+  } catch (e) {
+    // fall through to signed out
+  }
+  return null;
+}
+
+let authSession = loadAuthSession();
+let authRedirectError = "";
+
+function saveAuthSession() {
+  if (authSession) localStorage.setItem(AUTH_KEY, JSON.stringify(authSession));
+  else localStorage.removeItem(AUTH_KEY);
+}
+
+// After signing in: back up this device's trainer to the account, or - on a
+// fresh device - restore the trainer the account already owns.
+async function syncTrainerWithAccount() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    if (trainer && trainer.secret) {
+      await supabaseRpc(
+        "link_trainer",
+        { p_code: trainer.code, p_secret: trainer.secret },
+        authSession.access_token
+      );
+    } else {
+      const mine = await supabaseRpc("get_my_trainer", {}, authSession.access_token);
+      if (mine && mine.code) {
+        trainer = { nickname: mine.nickname, code: mine.code, secret: mine.secret };
+        saveTrainer();
+        schedulePushTeam();
+      }
+    }
+  } catch (e) {
+    // offline, or account.sql not run yet - sign-in still works locally
+  }
+}
+
+// Supabase sends OAuth tokens back in the URL hash after the Google redirect.
+async function handleAuthRedirect() {
+  if (!location.hash) return;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const desc = params.get("error_description");
+  if (desc) {
+    authRedirectError = desc.replace(/\+/g, " ");
+    history.replaceState(null, "", location.pathname + location.search);
+    return;
+  }
+  const access = params.get("access_token");
+  if (!access) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  authSession = {
+    access_token: access,
+    refresh_token: params.get("refresh_token") || "",
+    expires_at: Date.now() + Number(params.get("expires_in") || 3600) * 1000,
+    email: "",
+  };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${access}` },
+    });
+    if (res.ok) {
+      const user = await res.json();
+      authSession.email = user.email || "";
+    }
+  } catch (e) {
+    // keep the session; the email line is cosmetic
+  }
+  saveAuthSession();
+  await syncTrainerWithAccount();
+}
+
+async function ensureFreshAuth() {
+  if (!authSession || !supabaseConfigured()) return;
+  if (Date.now() < authSession.expires_at - 60000) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ refresh_token: authSession.refresh_token }),
+    });
+    if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
+    const data = await res.json();
+    authSession.access_token = data.access_token;
+    authSession.refresh_token = data.refresh_token || authSession.refresh_token;
+    authSession.expires_at = Date.now() + (data.expires_in || 3600) * 1000;
+    if (data.user && data.user.email) authSession.email = data.user.email;
+    saveAuthSession();
+  } catch (e) {
+    authSession = null;
+    saveAuthSession();
+  }
+}
+
+function startGoogleSignIn() {
+  const redirect = encodeURIComponent(location.origin + location.pathname);
+  location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirect}`;
+}
+
+async function signOutGoogle() {
+  const token = authSession ? authSession.access_token : null;
+  authSession = null;
+  saveAuthSession();
+  renderAccountView();
+  if (token) {
+    try {
+      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      // local sign-out already happened
+    }
+  }
+}
+
+// Save a nickname: renames the existing trainer, or registers a new one.
+async function saveNickname(nickname) {
+  if (supabaseConfigured()) {
+    try {
+      if (trainer && trainer.secret) {
+        await supabaseRpc("update_nickname", {
+          p_code: trainer.code,
+          p_secret: trainer.secret,
+          p_nickname: nickname,
+        });
+        trainer = { ...trainer, nickname };
+      } else {
+        const created = await supabaseRpc("create_trainer", { p_nickname: nickname });
+        trainer = { nickname, code: created.code, secret: created.secret };
+        await syncTrainerWithAccount();
+      }
+    } catch (err) {
+      return "couldn't reach the park - try again";
+    }
+  } else {
+    trainer = {
+      nickname,
+      code: trainer ? trainer.code : generateTrainerCode(),
+      secret: trainer ? trainer.secret : undefined,
+    };
+  }
+  saveTrainer();
+  schedulePushTeam();
+  return null;
+}
+
+function renderAccountView() {
+  accountNicknameInputEl.value = trainer ? trainer.nickname : "";
+  accountErrorEl.classList.add("hidden");
+  if (authRedirectError) {
+    showFormError(accountErrorEl, authRedirectError);
+    authRedirectError = "";
+  }
+  const signedIn = Boolean(authSession);
+  googleSigninBtnEl.classList.toggle("hidden", signedIn);
+  accountSignedinEl.classList.toggle("hidden", !signedIn);
+  if (signedIn) {
+    accountEmailEl.textContent = authSession.email
+      ? `signed in as ${authSession.email}`
+      : "signed in";
+  }
+}
+
+accountBtnEl.addEventListener("click", () => {
+  friendsHomeViewEl.classList.add("hidden");
+  friendsNicknameViewEl.classList.add("hidden");
+  renderAccountView();
+  friendsAccountViewEl.classList.remove("hidden");
+});
+
+accountBackEl.addEventListener("click", () => renderFriendsMenu());
+
+accountNicknameFormEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nickname = accountNicknameInputEl.value.trim();
+  if (!nickname) return;
+  accountErrorEl.classList.add("hidden");
+  const btn = accountNicknameFormEl.querySelector("button");
+  btn.disabled = true;
+  const error = await saveNickname(nickname);
+  btn.disabled = false;
+  if (error) {
+    showFormError(accountErrorEl, error);
+    return;
+  }
+  btn.textContent = "saved!";
+  setTimeout(() => {
+    btn.textContent = "save";
+  }, 1200);
+});
+
+googleSigninBtnEl.addEventListener("click", () => {
+  if (!supabaseConfigured()) {
+    showFormError(accountErrorEl, "sharing isn't set up on this build yet");
+    return;
+  }
+  startGoogleSignIn();
+});
+
+googleSignoutBtnEl.addEventListener("click", signOutGoogle);
+
 // A trainer registered before sharing was configured has no write secret;
 // re-register them once so their code becomes real. Their code changes,
 // but a local-only code was never shareable anyway.
@@ -1973,6 +2185,13 @@ if (supabaseConfigured() && trainer && !trainer.secret) {
 }
 
 refreshPark();
+
+if (supabaseConfigured()) {
+  (async () => {
+    await handleAuthRedirect();
+    await ensureFreshAuth();
+  })();
+}
 
 for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {

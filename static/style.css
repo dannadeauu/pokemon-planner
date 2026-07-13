@@ -799,7 +799,8 @@ h1 {
 }
 
 .friends-code-entry input,
-#friends-nickname-view input {
+#friends-nickname-view input,
+#friends-account-view input {
   width: 100%;
   padding: 14px 16px;
   font-size: 16px;
@@ -811,7 +812,8 @@ h1 {
 }
 
 .friends-code-entry input::placeholder,
-#friends-nickname-view input::placeholder {
+#friends-nickname-view input::placeholder,
+#friends-account-view input::placeholder {
   color: var(--muted);
 }
 
@@ -825,6 +827,70 @@ h1 {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
+}
+
+.friends-header-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.account-btn {
+  border: none;
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 10px;
+}
+
+.account-back {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 14px;
+}
+
+.account-nickname-form {
+  display: flex;
+  gap: 10px;
+}
+
+.account-nickname-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-save {
+  width: auto;
+  padding: 14px 18px;
+}
+
+.account-google {
+  margin-top: 26px;
+}
+
+.account-google-hint {
+  margin: 0 0 12px;
+}
+
+.account-email {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.account-signout {
+  background: var(--input-bg);
+  color: var(--text);
 }
 
 .friends-my-code {
