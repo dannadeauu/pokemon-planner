@@ -136,7 +136,10 @@
     <div class="settings-panel">
       <div class="settings-header">
         <h2>friends</h2>
-        <button class="settings-close" id="friends-close">✕</button>
+        <div class="friends-header-btns">
+          <button class="account-btn" id="account-btn" type="button">account</button>
+          <button class="settings-close" id="friends-close">✕</button>
+        </div>
       </div>
 
       <div id="friends-home-view">
@@ -173,6 +176,27 @@
         <button class="friends-btn" type="submit">save</button>
         <p class="friends-error hidden" id="nickname-error"></p>
       </form>
+
+      <div id="friends-account-view" class="hidden">
+        <button class="account-back" id="account-back" type="button">&larr; back</button>
+
+        <span class="settings-label">change nickname</span>
+        <form class="account-nickname-form" id="account-nickname-form">
+          <input type="text" id="account-nickname-input" placeholder="your nickname" maxlength="20" autocomplete="off" required />
+          <button class="friends-btn account-save" type="submit">save</button>
+        </form>
+        <p class="friends-error hidden" id="account-error"></p>
+
+        <div class="account-google">
+          <span class="settings-label">google account</span>
+          <p class="friends-hint account-google-hint">to back up changes and use across devices</p>
+          <button class="friends-btn" id="google-signin-btn" type="button">sign in with google</button>
+          <div class="account-signedin hidden" id="account-signedin">
+            <p class="account-email" id="account-email"></p>
+            <button class="friends-btn account-signout" id="google-signout-btn" type="button">sign out of google</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
