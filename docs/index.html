@@ -57,6 +57,7 @@
   </div>
 
   <div class="page friends-page off-left" id="friends-page">
+    <div class="park-list" id="park-list"></div>
     <button class="friends-fab" id="friends-fab" aria-label="Friends">
       <img src="./safari_ball.png" alt="" />
     </button>
@@ -139,7 +140,11 @@
 
         <div class="friends-code-entry hidden" id="friends-code-entry">
           <span class="settings-label">enter a friend's trainer code</span>
-          <input type="text" id="friend-code-input" placeholder="0000-0000-0000" autocomplete="off" />
+          <form class="friend-code-form" id="friend-code-form">
+            <input type="text" id="friend-code-input" placeholder="0000-0000-0000" autocomplete="off" inputmode="numeric" />
+            <button class="friends-btn friend-code-add" type="submit">add</button>
+          </form>
+          <p class="friends-error hidden" id="friend-code-error"></p>
         </div>
 
         <button class="friends-btn" id="get-code-btn">get my trainer code</button>
@@ -154,6 +159,7 @@
         <span class="settings-label">enter a nickname</span>
         <input type="text" id="nickname-input" placeholder="your nickname" maxlength="20" autocomplete="off" required />
         <button class="friends-btn" type="submit">save</button>
+        <p class="friends-error hidden" id="nickname-error"></p>
       </form>
     </div>
   </div>

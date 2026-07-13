@@ -817,6 +817,92 @@ h1 {
   text-align: center;
 }
 
+.friend-code-form {
+  display: flex;
+  gap: 10px;
+}
+
+.friend-code-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-code-add {
+  width: auto;
+  padding: 14px 18px;
+}
+
+.friends-error {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d9776f;
+}
+
+/* ---- the park: friends' teams ---- */
+.park-list {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 24px 16px 100px;
+}
+
+.park-card {
+  background: var(--team-card);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.park-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.park-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.park-remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.park-sprites {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.park-sprites img {
+  max-height: 56px;
+  image-rendering: pixelated;
+}
+
+.park-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.park-progress {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .friends-code-value {
   margin: 4px 0 0;
   font-size: 22px;

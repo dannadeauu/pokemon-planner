@@ -751,6 +751,8 @@ function renderTeamBlurBg(todos) {
 }
 
 async function renderTeam(todos) {
+  lastTeamTodos = todos;
+  schedulePushTeam();
   renderTeamBlurBg(todos);
   teamGridEl.innerHTML = "";
   const entries = [];
@@ -1374,6 +1376,7 @@ function settlePages(targetIndex, velocity) {
   const duration = Math.round(Math.min(Math.max(remaining / speed, 120), 340));
   swipeOffset = 0;
   pageIndex = targetIndex;
+  if (pageIndex === 0) refreshPark();
   pagesSettling = true;
   const ease = `transform ${duration}ms cubic-bezier(0.25, 0.8, 0.4, 1)`;
   pagerPages.forEach((el) => (el.style.transition = ease));
@@ -1480,11 +1483,21 @@ document.addEventListener(
 );
 
 // ---------------------------------------------------------------------------
-// Friends page: swipe right from the main list. Trainer identity lives on
-// this device for now; the code is what friends will use to find you.
+// Friends page: swipe right from the main list. Trainer identity and the
+// friends list live on this device; team snapshots sync through Supabase so
+// friends' pokemon can visit your park. With no Supabase project configured
+// everything still works, codes are just local and the park stays private.
 // ---------------------------------------------------------------------------
 
+// Paste your Supabase project's URL and anon (publishable) key here to turn
+// on sharing - both come from Project Settings -> API in the Supabase
+// dashboard, after running supabase/schema.sql in the SQL editor. The
+// localStorage overrides exist for debugging only.
+const SUPABASE_URL = localStorage.getItem("park-supabase-url") || "";
+const SUPABASE_ANON_KEY = localStorage.getItem("park-supabase-key") || "";
+
 const TRAINER_KEY = "todo-app-trainer";
+const FRIENDS_KEY = "todo-app-friends";
 
 const friendsFabEl = document.getElementById("friends-fab");
 const friendsOverlayEl = document.getElementById("friends-overlay");
@@ -1497,6 +1510,30 @@ const friendsMyCodeEl = document.getElementById("friends-my-code");
 const friendsMyCodeLabelEl = document.getElementById("friends-my-code-label");
 const friendsCodeValueEl = document.getElementById("friends-code-value");
 const nicknameInputEl = document.getElementById("nickname-input");
+const nicknameErrorEl = document.getElementById("nickname-error");
+const friendCodeFormEl = document.getElementById("friend-code-form");
+const friendCodeInputEl = document.getElementById("friend-code-input");
+const friendCodeErrorEl = document.getElementById("friend-code-error");
+const parkListEl = document.getElementById("park-list");
+
+function supabaseConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+async function supabaseRpc(fn, args) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) throw new Error(`supabase ${fn} failed: ${res.status}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
 
 function loadTrainer() {
   try {
@@ -1510,6 +1547,28 @@ function loadTrainer() {
 
 let trainer = loadTrainer();
 
+function saveTrainer() {
+  localStorage.setItem(TRAINER_KEY, JSON.stringify(trainer));
+}
+
+function loadFriends() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FRIENDS_KEY));
+    if (Array.isArray(stored)) return stored;
+  } catch (e) {
+    // fall through to an empty park
+  }
+  return [];
+}
+
+let friends = loadFriends();
+
+function saveFriends() {
+  localStorage.setItem(FRIENDS_KEY, JSON.stringify(friends));
+}
+
+// Local fallback used only when no Supabase project is configured; a
+// registered trainer gets a server-generated code instead so it's unique.
 function generateTrainerCode() {
   const digits = new Uint32Array(12);
   crypto.getRandomValues(digits);
@@ -1517,9 +1576,148 @@ function generateTrainerCode() {
   return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
 
+function normalizeCode(raw) {
+  const digits = String(raw).replace(/\D/g, "");
+  if (digits.length !== 12) return null;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 8)}-${digits.slice(8, 12)}`;
+}
+
+// ---- pushing this device's team up to the park ----
+
+let lastTeamTodos = [];
+let lastPushedSnapshot = null;
+let pushTeamTimer = null;
+
+function buildTeamSnapshot() {
+  const team = lastTeamTodos.slice(0, 6).map((t) => ({
+    name: t.pokemon.name,
+    dex_id: t.pokemon.dex_id,
+    shiny: Boolean(t.pokemon.shiny),
+    sprite: t.pokemon.sprite,
+  }));
+  const total = lastTeamTodos.length;
+  const done = lastTeamTodos.filter((t) => t.status === "done!").length;
+  return { team, progress: total ? Math.round((done / total) * 100) : 0 };
+}
+
+function schedulePushTeam() {
+  if (!supabaseConfigured() || !trainer || !trainer.secret) return;
+  clearTimeout(pushTeamTimer);
+  pushTeamTimer = setTimeout(async () => {
+    const snapshot = buildTeamSnapshot();
+    const body = JSON.stringify(snapshot);
+    if (body === lastPushedSnapshot) return;
+    try {
+      await supabaseRpc("push_team", {
+        p_code: trainer.code,
+        p_secret: trainer.secret,
+        p_snapshot: snapshot,
+      });
+      lastPushedSnapshot = body;
+    } catch (e) {
+      // offline or misconfigured - the next change will retry
+    }
+  }, 2000);
+}
+
+// ---- the park: friends' teams ----
+
+const parkTeams = {}; // code -> last fetched {nickname, snapshot, updated_at}
+
+function renderPark() {
+  parkListEl.innerHTML = "";
+  for (const friend of friends) {
+    const card = document.createElement("div");
+    card.className = "park-card";
+
+    const head = document.createElement("div");
+    head.className = "park-card-head";
+    const name = document.createElement("span");
+    name.className = "park-name";
+    name.textContent = friend.nickname;
+    const remove = document.createElement("button");
+    remove.className = "park-remove";
+    remove.setAttribute("aria-label", `remove ${friend.nickname}`);
+    remove.textContent = "\u2715";
+    remove.addEventListener("click", () => {
+      friends = friends.filter((f) => f.code !== friend.code);
+      saveFriends();
+      renderPark();
+    });
+    head.append(name, remove);
+    card.appendChild(head);
+
+    const data = parkTeams[friend.code];
+    const team = data && data.snapshot && Array.isArray(data.snapshot.team)
+      ? data.snapshot.team
+      : [];
+    if (team.length) {
+      const row = document.createElement("div");
+      row.className = "park-sprites";
+      for (const p of team) {
+        const img = document.createElement("img");
+        img.src = p.sprite;
+        img.alt = p.name;
+        row.appendChild(img);
+      }
+      card.appendChild(row);
+    } else {
+      const empty = document.createElement("p");
+      empty.className = "park-empty";
+      empty.textContent = !data
+        ? "loading..."
+        : data.unreachable
+          ? "can't reach the park right now"
+          : "no team synced yet";
+      card.appendChild(empty);
+    }
+
+    if (data && data.snapshot && typeof data.snapshot.progress === "number") {
+      const prog = document.createElement("p");
+      prog.className = "park-progress";
+      prog.textContent = `list progress: ${data.snapshot.progress}%`;
+      card.appendChild(prog);
+    }
+
+    parkListEl.appendChild(card);
+  }
+}
+
+async function refreshPark() {
+  renderPark();
+  if (!supabaseConfigured() || friends.length === 0) return;
+  await Promise.all(
+    friends.map(async (friend) => {
+      try {
+        const data = await supabaseRpc("get_team", { p_code: friend.code });
+        if (data) {
+          parkTeams[friend.code] = data;
+          if (data.nickname && data.nickname !== friend.nickname) {
+            friend.nickname = data.nickname;
+            saveFriends();
+          }
+        }
+      } catch (e) {
+        // keep whatever we last saw for this friend
+        if (!parkTeams[friend.code]) parkTeams[friend.code] = { unreachable: true };
+      }
+    })
+  );
+  renderPark();
+}
+
+// ---- the friends menu ----
+
+function showFormError(el, msg) {
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
 function renderFriendsMenu() {
   friendsHomeViewEl.classList.remove("hidden");
   friendsNicknameViewEl.classList.add("hidden");
+  friendCodeErrorEl.classList.add("hidden");
+  nicknameErrorEl.classList.add("hidden");
   const hasTrainer = Boolean(trainer);
   getCodeBtnEl.classList.toggle("hidden", hasTrainer);
   friendsCodeEntryEl.classList.toggle("hidden", !hasTrainer);
@@ -1550,15 +1748,89 @@ getCodeBtnEl.addEventListener("click", () => {
   nicknameInputEl.focus();
 });
 
-friendsNicknameViewEl.addEventListener("submit", (e) => {
+friendsNicknameViewEl.addEventListener("submit", async (e) => {
   e.preventDefault();
   const nickname = nicknameInputEl.value.trim();
   if (!nickname) return;
-  trainer = { nickname, code: trainer ? trainer.code : generateTrainerCode() };
-  localStorage.setItem(TRAINER_KEY, JSON.stringify(trainer));
+  nicknameErrorEl.classList.add("hidden");
+  if (supabaseConfigured()) {
+    const btn = friendsNicknameViewEl.querySelector("button");
+    btn.disabled = true;
+    try {
+      const created = await supabaseRpc("create_trainer", { p_nickname: nickname });
+      trainer = { nickname, code: created.code, secret: created.secret };
+    } catch (err) {
+      showFormError(nicknameErrorEl, "couldn't reach the park - try again");
+      return;
+    } finally {
+      btn.disabled = false;
+    }
+  } else {
+    trainer = { nickname, code: trainer ? trainer.code : generateTrainerCode() };
+  }
+  saveTrainer();
   nicknameInputEl.blur();
   renderFriendsMenu();
+  schedulePushTeam();
 });
+
+friendCodeFormEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  friendCodeErrorEl.classList.add("hidden");
+  const code = normalizeCode(friendCodeInputEl.value);
+  if (!code) {
+    showFormError(friendCodeErrorEl, "that doesn't look like a trainer code");
+    return;
+  }
+  if (trainer && code === trainer.code) {
+    showFormError(friendCodeErrorEl, "that's your own code!");
+    return;
+  }
+  if (friends.some((f) => f.code === code)) {
+    showFormError(friendCodeErrorEl, "they're already in your park");
+    return;
+  }
+  if (!supabaseConfigured()) {
+    showFormError(friendCodeErrorEl, "sharing isn't set up on this build yet");
+    return;
+  }
+  const btn = friendCodeFormEl.querySelector("button");
+  btn.disabled = true;
+  try {
+    const data = await supabaseRpc("get_team", { p_code: code });
+    if (!data) {
+      showFormError(friendCodeErrorEl, "no trainer found with that code");
+      return;
+    }
+    parkTeams[code] = data;
+    friends.push({ code, nickname: data.nickname });
+    saveFriends();
+    friendCodeInputEl.value = "";
+    renderPark();
+    closeFriends();
+  } catch (err) {
+    showFormError(friendCodeErrorEl, "couldn't reach the park - try again");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// A trainer registered before sharing was configured has no write secret;
+// re-register them once so their code becomes real. Their code changes,
+// but a local-only code was never shareable anyway.
+if (supabaseConfigured() && trainer && !trainer.secret) {
+  supabaseRpc("create_trainer", { p_nickname: trainer.nickname })
+    .then((created) => {
+      trainer = { nickname: trainer.nickname, code: created.code, secret: created.secret };
+      saveTrainer();
+      schedulePushTeam();
+    })
+    .catch(() => {
+      // stay local until the park is reachable
+    });
+}
+
+refreshPark();
 
 for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {
