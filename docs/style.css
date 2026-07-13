@@ -159,6 +159,10 @@ body {
   max-height: 100%;
 }
 
+.team-slot.flying {
+  align-items: center;
+}
+
 .team-slot.empty {
   border-radius: 16px;
   background: rgba(0, 0, 0, 0.05);
@@ -734,6 +738,9 @@ h1 {
   margin: 0 auto;
   height: 100vh;
   height: 100dvh;
+  padding: 20px 16px 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .friends-fab {
@@ -842,11 +849,12 @@ h1 {
 
 /* ---- the park: friends' teams ---- */
 .park-list {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 24px 16px 100px;
+  padding: 0 0 100px;
 }
 
 .park-card {
@@ -887,6 +895,10 @@ h1 {
 .park-sprites img {
   max-height: 56px;
   image-rendering: pixelated;
+}
+
+.park-sprites img.flying {
+  align-self: center;
 }
 
 .park-empty {

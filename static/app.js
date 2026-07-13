@@ -474,6 +474,26 @@ function renderTeamBlurBg(todos) {
   }
 }
 
+// Pokemon whose animated sprites depict them airborne or levitating. Their
+// gifs are cropped to content like everyone else's, so bottom-aligning them
+// plants them on the ground; these get centered in the slot instead.
+const FLYING_POKEMON = new Set([
+  "butterfree", "beedrill", "beedrill-mega", "pidgeot-mega", "zubat",
+  "golbat", "crobat", "gastly", "haunter", "alakazam-mega", "magnemite",
+  "magneton", "magnezone", "flygon", "beautifly", "dustox", "duskull",
+  "porygon2", "porygonz", "togetic", "togekiss", "hoppip", "skiploom",
+  "jumpluff", "beldum", "metang", "metagross-mega", "salamence-mega",
+  "solosis", "duosion", "reuniclus", "vanillite", "vanillish", "vanilluxe",
+  "klink", "klang", "klinklang", "tynamo", "eelektrik", "eelektross",
+  "lampent", "chandelure", "hydreigon", "vivillon", "orbeetle", "cosmog",
+  "cosmoem", "lunala", "dreepy", "drakloak", "dragapult", "honedge",
+  "doublade", "aegislash",
+]);
+
+function isFlying(name) {
+  return FLYING_POKEMON.has(name);
+}
+
 async function renderTeam(todos) {
   lastTeamTodos = todos;
   schedulePushTeam();
@@ -485,7 +505,7 @@ async function renderTeam(todos) {
     const slot = document.createElement("div");
     const todo = todos[i];
     if (todo) {
-      slot.className = "team-slot";
+      slot.className = "team-slot" + (isFlying(todo.pokemon.name) ? " flying" : "");
       registerDiscovery(todo.pokemon);
       const img = document.createElement("img");
       img.alt = todo.pokemon.name;
@@ -1376,6 +1396,7 @@ function renderPark() {
         const img = document.createElement("img");
         img.src = p.sprite;
         img.alt = p.name;
+        if (isFlying(p.name)) img.classList.add("flying");
         row.appendChild(img);
       }
       card.appendChild(row);
