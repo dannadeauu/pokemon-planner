@@ -1326,11 +1326,15 @@ async function renderDexGrid() {
   }
 }
 
-let currentPage = "main";
+let pageIndex = 1; // 0 = friends, 1 = main list, 2 = pokedex
 
-// ---- interactive swipe between the list and the pokedex ----
-// The pages track the finger while it moves; on release they settle to
-// whichever page is closer, or to the one a quick flick points at.
+// ---- interactive swipe between the friends page, the list, and the pokedex ----
+// The three pages sit side by side and track the finger while it moves; on
+// release they settle to whichever page is closer, or to the one a quick
+// flick points at.
+
+const friendsPageEl = document.getElementById("friends-page");
+const pagerPages = [friendsPageEl, appPageEl, dexPageEl];
 
 const PAGE_OFFSET = 1.02; // keep in sync with .off-left / .off-right in the CSS
 
@@ -1346,36 +1350,36 @@ function pageWidth() {
   return window.innerWidth * PAGE_OFFSET;
 }
 
-function positionPages(offset) {
-  const base = currentPage === "main" ? 0 : -pageWidth();
-  appPageEl.style.transition = "none";
-  dexPageEl.style.transition = "none";
-  appPageEl.style.transform = `translateX(${base + offset}px)`;
-  dexPageEl.style.transform = `translateX(${base + offset + pageWidth()}px)`;
+function restPageTransforms() {
+  pagerPages.forEach((el, i) => {
+    el.style.transform = `translateX(${(i - pageIndex) * 102}%)`;
+  });
 }
 
-function settlePages(commit, velocity) {
-  const target = commit ? (currentPage === "main" ? "dex" : "main") : currentPage;
+restPageTransforms();
+
+function positionPages(offset) {
+  pagerPages.forEach((el, i) => {
+    el.style.transition = "none";
+    el.style.transform = `translateX(calc(${(i - pageIndex) * 102}% + ${offset}px))`;
+  });
+}
+
+function settlePages(targetIndex, velocity) {
   const width = pageWidth();
-  const from = (currentPage === "main" ? 0 : -width) + swipeOffset;
-  const to = target === "main" ? 0 : -width;
+  const remaining = Math.abs((pageIndex - targetIndex) * width - swipeOffset);
   // Finish at the fling speed (but never crawl), so the release feels
   // continuous with the drag instead of restarting a canned animation.
   const speed = Math.max(Math.abs(velocity), 0.6); // px per ms
-  const duration = Math.round(Math.min(Math.max(Math.abs(to - from) / speed, 120), 340));
+  const duration = Math.round(Math.min(Math.max(remaining / speed, 120), 340));
   swipeOffset = 0;
+  pageIndex = targetIndex;
   pagesSettling = true;
   const ease = `transform ${duration}ms cubic-bezier(0.25, 0.8, 0.4, 1)`;
-  appPageEl.style.transition = ease;
-  dexPageEl.style.transition = ease;
-  appPageEl.style.transform = "";
-  dexPageEl.style.transform = "";
-  currentPage = target;
-  appPageEl.classList.toggle("off-left", target === "dex");
-  dexPageEl.classList.toggle("off-right", target !== "dex");
+  pagerPages.forEach((el) => (el.style.transition = ease));
+  restPageTransforms();
   setTimeout(() => {
-    appPageEl.style.transition = "";
-    dexPageEl.style.transition = "";
+    pagerPages.forEach((el) => (el.style.transition = ""));
     pagesSettling = false;
   }, duration + 60);
 }
@@ -1407,15 +1411,15 @@ document.addEventListener(
       if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
       swipeAxis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
       // render the grid up front so it's populated while it slides in
-      if (swipeAxis === "h" && currentPage === "main") renderDexGrid();
+      if (swipeAxis === "h" && pageIndex === 1 && dx < 0) renderDexGrid();
     }
     if (swipeAxis !== "h") return;
     e.preventDefault();
     const width = pageWidth();
-    let offset =
-      currentPage === "main"
-        ? Math.max(Math.min(dx, 0), -width)
-        : Math.min(Math.max(dx, 0), width);
+    let offset = Math.max(
+      Math.min(dx, pageIndex > 0 ? width : 0),
+      pageIndex < pagerPages.length - 1 ? -width : 0
+    );
     if (offset === 0 && dx !== 0) {
       // rubber-band when there is no page in that direction
       offset = Math.max(Math.min(dx / 4, 48), -48);
@@ -1446,13 +1450,17 @@ document.addEventListener(
     const first = recent[0];
     const velocity =
       first && now > first.t ? (touch.clientX - first.x) / (now - first.t) : 0;
-    const toward = currentPage === "main" ? -1 : 1; // direction that changes page
-    const progress = (swipeOffset * toward) / pageWidth();
-    const commit =
-      progress > 0 &&
-      velocity * toward > -0.3 &&
-      (progress > 0.5 || velocity * toward > 0.3);
-    settlePages(commit, velocity);
+    let target = pageIndex;
+    if (swipeOffset !== 0) {
+      const dir = swipeOffset < 0 ? 1 : -1; // page index the drag points at
+      const next = pageIndex + dir;
+      if (next >= 0 && next < pagerPages.length) {
+        const progress = Math.abs(swipeOffset) / pageWidth();
+        const vDir = -velocity * dir; // release speed in the drag direction
+        if (vDir > -0.3 && (progress > 0.5 || vDir > 0.3)) target = next;
+      }
+    }
+    settlePages(target, velocity);
   },
   { passive: true }
 );
@@ -1461,7 +1469,7 @@ document.addEventListener(
   "touchcancel",
   () => {
     if (swipeStartX !== null && swipeEligible && swipeAxis === "h") {
-      settlePages(false, 0);
+      settlePages(pageIndex, 0);
     }
     swipeStartX = null;
     swipeStartY = null;
@@ -1470,6 +1478,87 @@ document.addEventListener(
   },
   { passive: true }
 );
+
+// ---------------------------------------------------------------------------
+// Friends page: swipe right from the main list. Trainer identity lives on
+// this device for now; the code is what friends will use to find you.
+// ---------------------------------------------------------------------------
+
+const TRAINER_KEY = "todo-app-trainer";
+
+const friendsFabEl = document.getElementById("friends-fab");
+const friendsOverlayEl = document.getElementById("friends-overlay");
+const friendsCloseEl = document.getElementById("friends-close");
+const friendsHomeViewEl = document.getElementById("friends-home-view");
+const friendsNicknameViewEl = document.getElementById("friends-nickname-view");
+const friendsCodeEntryEl = document.getElementById("friends-code-entry");
+const getCodeBtnEl = document.getElementById("get-code-btn");
+const friendsMyCodeEl = document.getElementById("friends-my-code");
+const friendsMyCodeLabelEl = document.getElementById("friends-my-code-label");
+const friendsCodeValueEl = document.getElementById("friends-code-value");
+const nicknameInputEl = document.getElementById("nickname-input");
+
+function loadTrainer() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(TRAINER_KEY));
+    if (stored && stored.nickname && stored.code) return stored;
+  } catch (e) {
+    // fall through to no trainer yet
+  }
+  return null;
+}
+
+let trainer = loadTrainer();
+
+function generateTrainerCode() {
+  const digits = new Uint32Array(12);
+  crypto.getRandomValues(digits);
+  const raw = [...digits].map((n) => n % 10).join("");
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+}
+
+function renderFriendsMenu() {
+  friendsHomeViewEl.classList.remove("hidden");
+  friendsNicknameViewEl.classList.add("hidden");
+  const hasTrainer = Boolean(trainer);
+  getCodeBtnEl.classList.toggle("hidden", hasTrainer);
+  friendsCodeEntryEl.classList.toggle("hidden", !hasTrainer);
+  friendsMyCodeEl.classList.toggle("hidden", !hasTrainer);
+  if (hasTrainer) {
+    friendsMyCodeLabelEl.textContent = `${trainer.nickname}'s trainer code`;
+    friendsCodeValueEl.textContent = trainer.code;
+  }
+}
+
+const closeFriends = () => {
+  friendsOverlayEl.classList.add("hidden");
+  resetViewportScroll();
+};
+
+friendsFabEl.addEventListener("click", () => {
+  renderFriendsMenu();
+  friendsOverlayEl.classList.remove("hidden");
+});
+friendsCloseEl.addEventListener("click", closeFriends);
+friendsOverlayEl.addEventListener("click", (e) => {
+  if (e.target === friendsOverlayEl) closeFriends();
+});
+
+getCodeBtnEl.addEventListener("click", () => {
+  friendsHomeViewEl.classList.add("hidden");
+  friendsNicknameViewEl.classList.remove("hidden");
+  nicknameInputEl.focus();
+});
+
+friendsNicknameViewEl.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const nickname = nicknameInputEl.value.trim();
+  if (!nickname) return;
+  trainer = { nickname, code: trainer ? trainer.code : generateTrainerCode() };
+  localStorage.setItem(TRAINER_KEY, JSON.stringify(trainer));
+  nicknameInputEl.blur();
+  renderFriendsMenu();
+});
 
 for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {

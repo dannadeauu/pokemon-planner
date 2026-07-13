@@ -728,6 +728,102 @@ h1 {
 }
 
 
+/* ---- friends page (swipe right from the main list) ---- */
+.friends-page {
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.friends-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  z-index: 50;
+}
+
+.friends-fab img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+}
+
+.friends-fab:active {
+  transform: scale(0.94);
+}
+
+.settings-panel .hidden {
+  display: none;
+}
+
+.friends-intro {
+  margin: 0 0 20px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.friends-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--color-add);
+  color: white;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.friends-btn:active {
+  opacity: 0.85;
+}
+
+.friends-code-entry {
+  margin-bottom: 20px;
+}
+
+.friends-code-entry input,
+#friends-nickname-view input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  font-family: inherit;
+  border: none;
+  border-radius: 14px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.friends-code-entry input::placeholder,
+#friends-nickname-view input::placeholder {
+  color: var(--muted);
+}
+
+#friends-nickname-view input {
+  margin-bottom: 16px;
+}
+
+.friends-my-code {
+  margin-top: 22px;
+  text-align: center;
+}
+
+.friends-code-value {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
 /* ---- pokedex page (swipe left from the main list) ---- */
 .page {
   position: fixed;
