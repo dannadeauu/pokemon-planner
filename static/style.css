@@ -819,6 +819,14 @@ h1 {
   margin-bottom: 16px;
 }
 
+.friends-hint {
+  margin: -6px 0 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .friends-my-code {
   margin-top: 22px;
   text-align: center;
