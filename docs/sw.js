@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, runtime-cache sprites so the app
 // works offline after first load. Bump VERSION whenever shell files change.
-const VERSION = "myteam-v19";
+const VERSION = "myteam-v20";
 
 const SHELL = [
   "./",

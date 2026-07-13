@@ -1513,8 +1513,11 @@ document.addEventListener(
 // on sharing - both come from Project Settings -> API in the Supabase
 // dashboard, after running supabase/schema.sql in the SQL editor. The
 // localStorage overrides exist for debugging only.
-const SUPABASE_URL = localStorage.getItem("park-supabase-url") || "";
-const SUPABASE_ANON_KEY = localStorage.getItem("park-supabase-key") || "";
+const SUPABASE_URL =
+  localStorage.getItem("park-supabase-url") || "https://symqtabwgvickxmoxuzk.supabase.co";
+const SUPABASE_ANON_KEY =
+  localStorage.getItem("park-supabase-key") ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5bXF0YWJ3Z3ZpY2t4bW94dXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NjcyNDAsImV4cCI6MjA5OTU0MzI0MH0.NfnKW7cPUF9zGXa87B2MkWmUomX7Fi2DorKHfqrnhXk";
 
 const TRAINER_KEY = "todo-app-trainer";
 const FRIENDS_KEY = "todo-app-friends";
