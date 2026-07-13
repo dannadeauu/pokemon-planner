@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, runtime-cache sprites so the app
 // works offline after first load. Bump VERSION whenever shell files change.
-const VERSION = "myteam-v16";
+const VERSION = "myteam-v19";
 
 const SHELL = [
   "./",
@@ -16,7 +16,12 @@ const SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches
+      .open(VERSION)
+      // "reload" bypasses the HTTP cache so a new shell version can never be
+      // precached from stale heuristically-cached copies of its files.
+      .then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 

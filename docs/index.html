@@ -58,7 +58,10 @@
 
   <div class="page friends-page off-left" id="friends-page">
     <h1 class="dex-title">pokepark</h1>
-    <div class="park-list" id="park-list"></div>
+    <div class="park-list" id="park-list">
+      <div id="park-mine"></div>
+      <div id="park-friends"></div>
+    </div>
     <button class="friends-fab" id="friends-fab" aria-label="Friends">
       <img src="./safari_ball.png" alt="" />
     </button>
@@ -152,7 +155,14 @@
 
         <div class="friends-my-code hidden" id="friends-my-code">
           <span class="settings-label" id="friends-my-code-label"></span>
-          <p class="friends-code-value" id="friends-code-value"></p>
+          <div class="friends-code-row">
+            <p class="friends-code-value" id="friends-code-value"></p>
+            <button class="friends-btn copy-link-btn copy-link-inline hidden" id="copy-link-inline" type="button">copy link</button>
+          </div>
+          <div class="friends-empty hidden" id="friends-empty">
+            <p class="friends-empty-text">no friends yet... add some by sharing this web app!</p>
+            <button class="friends-btn copy-link-btn" id="copy-link-block" type="button">copy link</button>
+          </div>
         </div>
       </div>
 

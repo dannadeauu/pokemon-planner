@@ -1535,6 +1535,11 @@ const friendCodeFormEl = document.getElementById("friend-code-form");
 const friendCodeInputEl = document.getElementById("friend-code-input");
 const friendCodeErrorEl = document.getElementById("friend-code-error");
 const parkListEl = document.getElementById("park-list");
+const parkMineEl = document.getElementById("park-mine");
+const parkFriendsEl = document.getElementById("park-friends");
+const copyLinkInlineEl = document.getElementById("copy-link-inline");
+const copyLinkBlockEl = document.getElementById("copy-link-block");
+const friendsEmptyEl = document.getElementById("friends-empty");
 
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -1587,6 +1592,9 @@ function saveFriends() {
   localStorage.setItem(FRIENDS_KEY, JSON.stringify(friends));
 }
 
+const PARK_MSG_KEY = "todo-app-park-message";
+let parkMessage = localStorage.getItem(PARK_MSG_KEY) || "";
+
 // Local fallback used only when no Supabase project is configured; a
 // registered trainer gets a server-generated code instead so it's unique.
 function generateTrainerCode() {
@@ -1617,7 +1625,14 @@ function buildTeamSnapshot() {
   }));
   const total = lastTeamTodos.length;
   const done = lastTeamTodos.filter((t) => t.status === "done!").length;
-  return { team, progress: total ? Math.round((done / total) * 100) : 0 };
+  return {
+    team,
+    progress: total ? Math.round((done / total) * 100) : 0,
+    fully_evolved:
+      team.length > 0 &&
+      lastTeamTodos.slice(0, 6).every((t) => t.status === "done!"),
+    message: parkMessage.trim().slice(0, 200),
+  };
 }
 
 function schedulePushTeam() {
@@ -1644,17 +1659,60 @@ function schedulePushTeam() {
 
 const parkTeams = {}; // code -> last fetched {nickname, snapshot, updated_at}
 
-function renderPark() {
-  parkListEl.innerHTML = "";
+function renderParkMine() {
+  parkMineEl.innerHTML = "";
+
+  const title = document.createElement("h2");
+  title.className = "park-my-title";
+  title.textContent = "my team";
+  parkMineEl.appendChild(title);
+
+  const box = document.createElement("div");
+  box.className = "park-my-icons";
+  for (const todo of lastTeamTodos.slice(0, 6)) {
+    const img = document.createElement("img");
+    img.src = todo.pokemon.icon;
+    img.alt = todo.pokemon.name;
+    box.appendChild(img);
+  }
+  parkMineEl.appendChild(box);
+
+  const msg = document.createElement("textarea");
+  msg.className = "park-msg-input";
+  msg.rows = 1;
+  msg.maxLength = 200;
+  msg.placeholder = "add a message for your friends...";
+  msg.value = parkMessage;
+  const autosize = () => {
+    msg.style.height = "auto";
+    msg.style.height = `${msg.scrollHeight}px`;
+  };
+  msg.addEventListener("input", () => {
+    parkMessage = msg.value.slice(0, 200);
+    localStorage.setItem(PARK_MSG_KEY, parkMessage);
+    autosize();
+    schedulePushTeam();
+  });
+  parkMineEl.appendChild(msg);
+  autosize();
+}
+
+function renderParkFriends() {
+  parkFriendsEl.innerHTML = "";
   for (const friend of friends) {
-    const card = document.createElement("div");
-    card.className = "park-card";
+    const section = document.createElement("div");
+    section.className = "park-friend";
 
     const head = document.createElement("div");
-    head.className = "park-card-head";
-    const name = document.createElement("span");
-    name.className = "park-name";
-    name.textContent = friend.nickname;
+    head.className = "park-friend-head";
+    const name = document.createElement("h2");
+    name.className = "park-friend-name";
+    name.textContent = `${friend.nickname}'s team`;
+    const data = parkTeams[friend.code];
+    const snapshot = data ? data.snapshot : null;
+    if (snapshot && snapshot.fully_evolved) {
+      name.insertAdjacentHTML("beforeend", SHINY_STAR_SVG);
+    }
     const remove = document.createElement("button");
     remove.className = "park-remove";
     remove.setAttribute("aria-label", `remove ${friend.nickname}`);
@@ -1662,26 +1720,42 @@ function renderPark() {
     remove.addEventListener("click", () => {
       friends = friends.filter((f) => f.code !== friend.code);
       saveFriends();
-      renderPark();
+      renderParkFriends();
     });
     head.append(name, remove);
-    card.appendChild(head);
+    section.appendChild(head);
 
-    const data = parkTeams[friend.code];
-    const team = data && data.snapshot && Array.isArray(data.snapshot.team)
-      ? data.snapshot.team
-      : [];
+    const team = snapshot && Array.isArray(snapshot.team) ? snapshot.team : [];
     if (team.length) {
-      const row = document.createElement("div");
-      row.className = "park-sprites";
+      // same card structure as the main team: blurred copies behind a 3x2 grid
+      const card = document.createElement("div");
+      card.className = "park-team-card";
+      const blur = document.createElement("div");
+      blur.className = "team-blur-bg";
       for (const p of team) {
         const img = document.createElement("img");
         img.src = p.sprite;
-        img.alt = p.name;
-        if (isFlying(p.name)) img.classList.add("flying");
-        row.appendChild(img);
+        img.alt = "";
+        blur.appendChild(img);
       }
-      card.appendChild(row);
+      const grid = document.createElement("div");
+      grid.className = "team-grid";
+      for (let i = 0; i < 6; i++) {
+        const slot = document.createElement("div");
+        const p = team[i];
+        if (p) {
+          slot.className = "team-slot" + (isFlying(p.name) ? " flying" : "");
+          const img = document.createElement("img");
+          img.src = p.sprite;
+          img.alt = p.name;
+          slot.appendChild(img);
+        } else {
+          slot.className = "team-slot empty";
+        }
+        grid.appendChild(slot);
+      }
+      card.append(blur, grid);
+      section.appendChild(card);
     } else {
       const empty = document.createElement("p");
       empty.className = "park-empty";
@@ -1690,18 +1764,29 @@ function renderPark() {
         : data.unreachable
           ? "can't reach the park right now"
           : "no team synced yet";
-      card.appendChild(empty);
+      section.appendChild(empty);
     }
 
-    if (data && data.snapshot && typeof data.snapshot.progress === "number") {
-      const prog = document.createElement("p");
-      prog.className = "park-progress";
-      prog.textContent = `list progress: ${data.snapshot.progress}%`;
-      card.appendChild(prog);
+    const msgText =
+      snapshot && typeof snapshot.message === "string"
+        ? snapshot.message.trim().slice(0, 200)
+        : "";
+    if (msgText) {
+      const m = document.createElement("p");
+      m.className = "park-friend-msg";
+      m.textContent = `"${msgText}"`;
+      section.appendChild(m);
     }
 
-    parkListEl.appendChild(card);
+    parkFriendsEl.appendChild(section);
   }
+}
+
+// NOTE: friends' pokemon are display-only - nothing in the park calls
+// registerDiscovery, so visiting teams never fill in the local pokedex.
+function renderPark() {
+  renderParkMine();
+  renderParkFriends();
 }
 
 async function refreshPark() {
@@ -1724,7 +1809,7 @@ async function refreshPark() {
       }
     })
   );
-  renderPark();
+  renderParkFriends();
 }
 
 // ---- the friends menu ----
@@ -1746,6 +1831,9 @@ function renderFriendsMenu() {
   if (hasTrainer) {
     friendsMyCodeLabelEl.textContent = `${trainer.nickname}'s trainer code`;
     friendsCodeValueEl.textContent = trainer.code;
+    const hasFriends = friends.length > 0;
+    copyLinkInlineEl.classList.toggle("hidden", !hasFriends);
+    friendsEmptyEl.classList.toggle("hidden", hasFriends);
   }
 }
 
@@ -1835,6 +1923,36 @@ friendCodeFormEl.addEventListener("submit", async (e) => {
     btn.disabled = false;
   }
 });
+
+async function copyAppLink(btn) {
+  const link = location.origin + location.pathname;
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(link);
+    copied = true;
+  } catch (e) {
+    // legacy fallback for older webviews / missing clipboard permission
+    const scratch = document.createElement("textarea");
+    scratch.value = link;
+    scratch.setAttribute("readonly", "");
+    scratch.style.position = "fixed";
+    scratch.style.opacity = "0";
+    document.body.appendChild(scratch);
+    scratch.select();
+    try {
+      copied = document.execCommand("copy");
+    } catch (e2) {
+      copied = false;
+    }
+    scratch.remove();
+  }
+  btn.textContent = copied ? "copied!" : "copy failed";
+  setTimeout(() => {
+    btn.textContent = "copy link";
+  }, 1400);
+}
+copyLinkInlineEl.addEventListener("click", () => copyAppLink(copyLinkInlineEl));
+copyLinkBlockEl.addEventListener("click", () => copyAppLink(copyLinkBlockEl));
 
 // A trainer registered before sharing was configured has no write secret;
 // re-register them once so their code becomes real. Their code changes,
