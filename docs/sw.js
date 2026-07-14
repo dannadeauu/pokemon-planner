@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, runtime-cache sprites so the app
 // works offline after first load. Bump VERSION whenever shell files change.
-const VERSION = "myteam-v23";
+const VERSION = "myteam-v24";
 
 const SHELL = [
   "./",
@@ -10,6 +10,9 @@ const SHELL = [
   "./manifest.webmanifest",
   "./shiny_sparkle.webp",
   "./safari_ball.png",
+  "./sig_swablu.png",
+  "./sig_altaria.png",
+  "./sig_altaria_mega.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];

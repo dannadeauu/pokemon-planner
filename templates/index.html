@@ -169,6 +169,11 @@
           <div class="friends-empty hidden" id="friends-empty">
             <p class="friends-empty-text">no friends yet... add some by sharing this web app!</p>
           </div>
+
+          <div class="friend-requests hidden" id="friend-requests">
+            <span class="settings-label">friend requests</span>
+            <div id="friend-requests-list"></div>
+          </div>
         </div>
       </div>
 
@@ -176,7 +181,7 @@
         <span class="settings-label">enter a nickname</span>
         <input type="text" id="nickname-input" placeholder="your nickname" maxlength="20" autocomplete="off" required />
         <p class="friends-hint">this is what your friends will see. no need to make it unique!</p>
-        <button class="friends-btn" type="submit">save</button>
+        <button class="friends-btn friends-btn-secondary" type="submit">proceed with nickname</button>
         <p class="friends-error hidden" id="nickname-error"></p>
         <div class="friends-or">or</div>
         <button class="friends-btn" id="nickname-google-btn" type="button">sign in with google</button>
@@ -210,8 +215,17 @@
     <div class="dev-note-box">
       <h3 class="dev-note-title">note from developer</h3>
       <p class="dev-note-body">this app runs totally free (i am broke) so google sign-in is handled through Supabase, an open-source program for the backend of apps. so, you'll see a funky link that it looks like you're being directed to (symqtabwgvickxmoxuzk.supabase.co), it's not a virus, it's just cus it's convenient and secure (and free)! you'll still be redirected here.</p>
+      <p class="dev-note-sign">- danielle<img class="sign-sprite" src="{{ url_for('static', filename='sig_swablu.png') }}" alt="" /><img class="sign-sprite" src="{{ url_for('static', filename='sig_altaria.png') }}" alt="" /><img class="sign-sprite" src="{{ url_for('static', filename='sig_altaria_mega.png') }}" alt="" /></p>
       <button class="friends-btn" id="dev-note-continue" type="button">oh chill... continue to sign in</button>
       <button class="friends-btn dev-note-cancel" id="dev-note-cancel" type="button">cancel</button>
+    </div>
+  </div>
+
+  <div class="dev-note-overlay hidden" id="remove-friend-overlay">
+    <div class="dev-note-box remove-friend-box">
+      <h3 class="dev-note-title">remove friend?</h3>
+      <button class="friends-btn" id="remove-friend-no" type="button">no</button>
+      <button class="friends-btn friends-btn-secondary" id="remove-friend-yes" type="button">yes</button>
     </div>
   </div>
 

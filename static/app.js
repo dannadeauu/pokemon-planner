@@ -1276,6 +1276,12 @@ const accountSignedinEl = document.getElementById("account-signedin");
 const accountEmailEl = document.getElementById("account-email");
 const googleSignoutBtnEl = document.getElementById("google-signout-btn");
 
+const friendRequestsEl = document.getElementById("friend-requests");
+const friendRequestsListEl = document.getElementById("friend-requests-list");
+const removeFriendOverlayEl = document.getElementById("remove-friend-overlay");
+const removeFriendYesEl = document.getElementById("remove-friend-yes");
+const removeFriendNoEl = document.getElementById("remove-friend-no");
+
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
@@ -1290,8 +1296,17 @@ async function supabaseRpc(fn, args, accessToken) {
     },
     body: JSON.stringify(args),
   });
-  if (!res.ok) throw new Error(`supabase ${fn} failed: ${res.status}`);
   const text = await res.text();
+  if (!res.ok) {
+    let msg = `supabase ${fn} failed: ${res.status}`;
+    try {
+      const body = JSON.parse(text);
+      if (body && body.message) msg = body.message;
+    } catch (e) {
+      // non-JSON error body
+    }
+    throw new Error(msg);
+  }
   return text ? JSON.parse(text) : null;
 }
 
@@ -1325,6 +1340,24 @@ let friends = loadFriends();
 
 function saveFriends() {
   localStorage.setItem(FRIENDS_KEY, JSON.stringify(friends));
+}
+
+const REQUESTS_KEY = "todo-app-requests";
+
+function loadRequests() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(REQUESTS_KEY));
+    if (Array.isArray(stored)) return stored;
+  } catch (e) {
+    // fall through to no requests
+  }
+  return [];
+}
+
+let friendRequests = loadRequests();
+
+function saveRequests() {
+  localStorage.setItem(REQUESTS_KEY, JSON.stringify(friendRequests));
 }
 
 const PARK_MSG_KEY = "todo-app-park-message";
@@ -1392,8 +1425,6 @@ function schedulePushTeam() {
 
 // ---- the park: friends' teams ----
 
-const parkTeams = {}; // code -> last fetched {nickname, snapshot, updated_at}
-
 function renderParkMine() {
   parkMineEl.innerHTML = "";
 
@@ -1443,8 +1474,7 @@ function renderParkFriends() {
     const name = document.createElement("h2");
     name.className = "park-friend-name";
     name.textContent = `${friend.nickname}'s team`;
-    const data = parkTeams[friend.code];
-    const snapshot = data ? data.snapshot : null;
+    const snapshot = friend.snapshot || null;
     if (snapshot && snapshot.fully_evolved) {
       name.insertAdjacentHTML("beforeend", SHINY_STAR_SVG);
     }
@@ -1452,11 +1482,7 @@ function renderParkFriends() {
     remove.className = "park-remove";
     remove.setAttribute("aria-label", `remove ${friend.nickname}`);
     remove.textContent = "\u2715";
-    remove.addEventListener("click", () => {
-      friends = friends.filter((f) => f.code !== friend.code);
-      saveFriends();
-      renderParkFriends();
-    });
+    remove.addEventListener("click", () => askRemoveFriend(friend.code));
     head.append(name, remove);
     section.appendChild(head);
 
@@ -1494,11 +1520,7 @@ function renderParkFriends() {
     } else {
       const empty = document.createElement("p");
       empty.className = "park-empty";
-      empty.textContent = !data
-        ? "loading..."
-        : data.unreachable
-          ? "can't reach the park right now"
-          : "no team synced yet";
+      empty.textContent = "no team synced yet";
       section.appendChild(empty);
     }
 
@@ -1524,34 +1546,132 @@ function renderPark() {
   renderParkFriends();
 }
 
-async function refreshPark() {
-  renderPark();
-  if (!supabaseConfigured() || friends.length === 0) return;
-  await Promise.all(
-    friends.map(async (friend) => {
-      try {
-        const data = await supabaseRpc("get_team", { p_code: friend.code });
-        if (data) {
-          parkTeams[friend.code] = data;
-          if (data.nickname && data.nickname !== friend.nickname) {
-            friend.nickname = data.nickname;
-            saveFriends();
-          }
-        }
-      } catch (e) {
-        // keep whatever we last saw for this friend
-        if (!parkTeams[friend.code]) parkTeams[friend.code] = { unreachable: true };
-      }
-    })
-  );
-  renderParkFriends();
+// Pull the authoritative friend + request state from the server. Accepted
+// friends arrive with their team snapshots embedded; incoming requests are
+// trainers who added my code and I haven't accepted yet.
+async function refreshFriends() {
+  if (!supabaseConfigured() || !trainer || !trainer.secret) return;
+  try {
+    const data = await supabaseRpc("list_friends", {
+      p_code: trainer.code,
+      p_secret: trainer.secret,
+    });
+    friends = (data && data.friends) || [];
+    friendRequests = (data && data.requests) || [];
+    saveFriends();
+    saveRequests();
+    renderParkFriends();
+    renderFriendRequests();
+  } catch (e) {
+    // offline or friends.sql not run yet - keep cached state
+  }
 }
+
+function refreshPark() {
+  renderPark();
+  refreshFriends();
+}
+
+function renderFriendRequests() {
+  if (!friendRequestsEl) return;
+  friendRequestsListEl.innerHTML = "";
+  friendRequestsEl.classList.toggle("hidden", friendRequests.length === 0);
+  for (const req of friendRequests) {
+    const row = document.createElement("div");
+    row.className = "friend-request-row";
+    const name = document.createElement("span");
+    name.className = "friend-request-name";
+    name.textContent = req.nickname;
+    const actions = document.createElement("div");
+    actions.className = "friend-request-actions";
+    const yes = document.createElement("button");
+    yes.className = "req-btn req-accept";
+    yes.setAttribute("aria-label", `accept ${req.nickname}`);
+    yes.textContent = "\u2713";
+    yes.addEventListener("click", () => respondRequest(req.code, true));
+    const no = document.createElement("button");
+    no.className = "req-btn req-decline";
+    no.setAttribute("aria-label", `decline ${req.nickname}`);
+    no.textContent = "\u2715";
+    no.addEventListener("click", () => respondRequest(req.code, false));
+    actions.append(yes, no);
+    row.append(name, actions);
+    friendRequestsListEl.appendChild(row);
+  }
+}
+
+async function respondRequest(code, accept) {
+  if (!trainer || !trainer.secret) return;
+  // optimistic: drop it from the list right away
+  friendRequests = friendRequests.filter((r) => r.code !== code);
+  saveRequests();
+  renderFriendRequests();
+  try {
+    await supabaseRpc("respond_friend_request", {
+      p_code: trainer.code,
+      p_secret: trainer.secret,
+      p_requester_code: code,
+      p_accept: accept,
+    });
+  } catch (e) {
+    // the refresh below re-syncs the real state
+  }
+  refreshFriends();
+}
+
+// ---- removing a friend (with confirmation) ----
+
+let pendingRemoveCode = null;
+
+function askRemoveFriend(code) {
+  pendingRemoveCode = code;
+  removeFriendOverlayEl.classList.remove("hidden");
+}
+
+removeFriendNoEl.addEventListener("click", () => {
+  pendingRemoveCode = null;
+  removeFriendOverlayEl.classList.add("hidden");
+});
+
+removeFriendYesEl.addEventListener("click", async () => {
+  const code = pendingRemoveCode;
+  pendingRemoveCode = null;
+  removeFriendOverlayEl.classList.add("hidden");
+  if (!code || !trainer || !trainer.secret) return;
+  friends = friends.filter((f) => f.code !== code);
+  saveFriends();
+  renderParkFriends();
+  try {
+    await supabaseRpc("remove_friend", {
+      p_code: trainer.code,
+      p_secret: trainer.secret,
+      p_friend_code: code,
+    });
+  } catch (e) {
+    // ignore; refresh re-syncs
+  }
+  refreshFriends();
+});
+
+removeFriendOverlayEl.addEventListener("click", (e) => {
+  if (e.target === removeFriendOverlayEl) {
+    pendingRemoveCode = null;
+    removeFriendOverlayEl.classList.add("hidden");
+  }
+});
 
 // ---- the friends menu ----
 
 function showFormError(el, msg) {
   el.textContent = msg;
   el.classList.remove("hidden");
+  el.classList.remove("success");
+}
+
+function showFormNote(el, msg) {
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  el.classList.add("success");
 }
 
 function renderFriendsMenu() {
@@ -1568,6 +1688,7 @@ function renderFriendsMenu() {
     friendsMyCodeLabelEl.textContent = `${trainer.nickname}'s trainer code`;
     friendsCodeValueEl.textContent = trainer.code;
     friendsEmptyEl.classList.toggle("hidden", friends.length > 0);
+    renderFriendRequests();
   }
 }
 
@@ -1579,6 +1700,7 @@ const closeFriends = () => {
 friendsFabEl.addEventListener("click", () => {
   renderFriendsMenu();
   friendsOverlayEl.classList.remove("hidden");
+  refreshFriends();
 });
 friendsCloseEl.addEventListener("click", closeFriends);
 friendsOverlayEl.addEventListener("click", (e) => {
@@ -1624,26 +1746,32 @@ friendCodeFormEl.addEventListener("submit", async (e) => {
     showFormError(friendCodeErrorEl, "they're already in your park");
     return;
   }
-  if (!supabaseConfigured()) {
-    showFormError(friendCodeErrorEl, "sharing isn't set up on this build yet");
+  if (!supabaseConfigured() || !trainer || !trainer.secret) {
+    showFormError(friendCodeErrorEl, "make your trainer code first");
     return;
   }
   const btn = friendCodeFormEl.querySelector("button");
   btn.disabled = true;
   try {
-    const data = await supabaseRpc("get_team", { p_code: code });
-    if (!data) {
-      showFormError(friendCodeErrorEl, "no trainer found with that code");
-      return;
-    }
-    parkTeams[code] = data;
-    friends.push({ code, nickname: data.nickname });
-    saveFriends();
+    const res = await supabaseRpc("send_friend_request", {
+      p_code: trainer.code,
+      p_secret: trainer.secret,
+      p_friend_code: code,
+    });
     friendCodeInputEl.value = "";
-    renderPark();
-    closeFriends();
+    showFormNote(
+      friendCodeErrorEl,
+      res && res.status === "accepted" ? "you're friends now!" : "request sent!"
+    );
+    await refreshFriends();
   } catch (err) {
-    showFormError(friendCodeErrorEl, "couldn't reach the park - try again");
+    const msg = String((err && err.message) || "");
+    showFormError(
+      friendCodeErrorEl,
+      msg.includes("no trainer")
+        ? "no trainer found with that code"
+        : "couldn't reach the park - try again"
+    );
   } finally {
     btn.disabled = false;
   }
