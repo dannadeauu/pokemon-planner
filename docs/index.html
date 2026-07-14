@@ -160,11 +160,22 @@
           <span class="settings-label" id="friends-my-code-label"></span>
           <div class="friends-code-row">
             <p class="friends-code-value" id="friends-code-value"></p>
-            <button class="friends-btn copy-link-btn copy-link-inline hidden" id="copy-link-inline" type="button">copy link</button>
+            <button class="code-icon-btn" id="copy-code-btn" type="button" aria-label="copy trainer code">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button class="code-icon-btn share-icon-btn" id="share-link-btn" type="button" aria-label="share invite link">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"></path>
+                <path d="M12 15V3"></path>
+                <path d="M8 7l4-4 4 4"></path>
+              </svg>
+            </button>
           </div>
           <div class="friends-empty hidden" id="friends-empty">
             <p class="friends-empty-text">no friends yet... add some by sharing this web app!</p>
-            <button class="friends-btn copy-link-btn" id="copy-link-block" type="button">copy link</button>
           </div>
         </div>
       </div>
@@ -175,6 +186,9 @@
         <p class="friends-hint">this is what your friends will see. no need to make it unique!</p>
         <button class="friends-btn" type="submit">save</button>
         <p class="friends-error hidden" id="nickname-error"></p>
+        <div class="friends-or">or</div>
+        <button class="friends-btn" id="nickname-google-btn" type="button">sign in with google</button>
+        <p class="friends-hint nickname-google-hint">to access an existing team (or to use this planner cross-device!)</p>
       </form>
 
       <div id="friends-account-view" class="hidden">
@@ -197,6 +211,15 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="dev-note-overlay hidden" id="dev-note-overlay">
+    <div class="dev-note-box">
+      <h3 class="dev-note-title">note from developer</h3>
+      <p class="dev-note-body">this app runs totally free (i am broke) so google sign-in is handled through Supabase, an open-source program for the backend of apps. so, you'll see a funky link that it looks like you're being directed to (symqtabwgvickxmoxuzk.supabase.co), it's not a virus, it's just cus it's convenient and secure (and free)! you'll still be redirected here.</p>
+      <button class="friends-btn" id="dev-note-continue" type="button">oh chill... continue to sign in</button>
+      <button class="friends-btn dev-note-cancel" id="dev-note-cancel" type="button">cancel</button>
     </div>
   </div>
 

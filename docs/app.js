@@ -1417,7 +1417,7 @@ document.addEventListener(
     swipeAxis = null;
     swipeSamples = [{ t: e.timeStamp, x: touch.clientX }];
     swipeEligible = !e.target.closest(
-      ".drag-handle, input, select, .settings-overlay, .pokedex-overlay"
+      ".drag-handle, input, select, .settings-overlay, .pokedex-overlay, .dev-note-overlay"
     );
   },
   { passive: true }
@@ -1540,9 +1540,13 @@ const friendCodeErrorEl = document.getElementById("friend-code-error");
 const parkListEl = document.getElementById("park-list");
 const parkMineEl = document.getElementById("park-mine");
 const parkFriendsEl = document.getElementById("park-friends");
-const copyLinkInlineEl = document.getElementById("copy-link-inline");
-const copyLinkBlockEl = document.getElementById("copy-link-block");
+const copyCodeBtnEl = document.getElementById("copy-code-btn");
+const shareLinkBtnEl = document.getElementById("share-link-btn");
 const friendsEmptyEl = document.getElementById("friends-empty");
+const nicknameGoogleBtnEl = document.getElementById("nickname-google-btn");
+const devNoteOverlayEl = document.getElementById("dev-note-overlay");
+const devNoteContinueEl = document.getElementById("dev-note-continue");
+const devNoteCancelEl = document.getElementById("dev-note-cancel");
 const accountBtnEl = document.getElementById("account-btn");
 const friendsAccountViewEl = document.getElementById("friends-account-view");
 const accountBackEl = document.getElementById("account-back");
@@ -1845,9 +1849,7 @@ function renderFriendsMenu() {
   if (hasTrainer) {
     friendsMyCodeLabelEl.textContent = `${trainer.nickname}'s trainer code`;
     friendsCodeValueEl.textContent = trainer.code;
-    const hasFriends = friends.length > 0;
-    copyLinkInlineEl.classList.toggle("hidden", !hasFriends);
-    friendsEmptyEl.classList.toggle("hidden", hasFriends);
+    friendsEmptyEl.classList.toggle("hidden", friends.length > 0);
   }
 }
 
@@ -1929,35 +1931,76 @@ friendCodeFormEl.addEventListener("submit", async (e) => {
   }
 });
 
-async function copyAppLink(btn) {
-  const link = location.origin + location.pathname;
-  let copied = false;
+async function writeClipboard(text) {
   try {
-    await navigator.clipboard.writeText(link);
-    copied = true;
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch (e) {
     // legacy fallback for older webviews / missing clipboard permission
     const scratch = document.createElement("textarea");
-    scratch.value = link;
+    scratch.value = text;
     scratch.setAttribute("readonly", "");
     scratch.style.position = "fixed";
     scratch.style.opacity = "0";
     document.body.appendChild(scratch);
     scratch.select();
+    let ok = false;
     try {
-      copied = document.execCommand("copy");
+      ok = document.execCommand("copy");
     } catch (e2) {
-      copied = false;
+      ok = false;
     }
     scratch.remove();
+    return ok;
   }
-  btn.textContent = copied ? "copied!" : "copy failed";
-  setTimeout(() => {
-    btn.textContent = "copy link";
-  }, 1400);
 }
-copyLinkInlineEl.addEventListener("click", () => copyAppLink(copyLinkInlineEl));
-copyLinkBlockEl.addEventListener("click", () => copyAppLink(copyLinkBlockEl));
+
+const INVITE_MESSAGE =
+  "be my friend on pokeplanner plzzzz my team is so cool you gotta see";
+const COPY_ICON_HTML = copyCodeBtnEl.innerHTML;
+const SHARE_ICON_HTML = shareLinkBtnEl.innerHTML;
+const CHECK_ICON_HTML =
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>';
+
+function appLink() {
+  return location.origin + location.pathname;
+}
+
+// The copy icon copies the trainer code itself; briefly swap to a checkmark.
+async function copyTrainerCode() {
+  if (!trainer) return;
+  const ok = await writeClipboard(trainer.code);
+  if (!ok) return;
+  copyCodeBtnEl.innerHTML = CHECK_ICON_HTML;
+  copyCodeBtnEl.classList.add("copied");
+  setTimeout(() => {
+    copyCodeBtnEl.innerHTML = COPY_ICON_HTML;
+    copyCodeBtnEl.classList.remove("copied");
+  }, 1200);
+}
+
+// The share button hands the invite link to the OS share sheet (iMessage,
+// Instagram, etc). Where that isn't available, it copies text + link instead.
+async function shareInvite() {
+  const url = appLink();
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: INVITE_MESSAGE, url });
+    } catch (e) {
+      // user dismissed the share sheet - nothing to do
+    }
+    return;
+  }
+  const ok = await writeClipboard(`${INVITE_MESSAGE} ${url}`);
+  if (!ok) return;
+  shareLinkBtnEl.innerHTML = CHECK_ICON_HTML;
+  setTimeout(() => {
+    shareLinkBtnEl.innerHTML = SHARE_ICON_HTML;
+  }, 1200);
+}
+
+copyCodeBtnEl.addEventListener("click", copyTrainerCode);
+shareLinkBtnEl.addEventListener("click", shareInvite);
 
 // ---- account: nickname changes + google sign-in backup ----
 
@@ -2159,12 +2202,28 @@ accountNicknameFormEl.addEventListener("submit", async (e) => {
   }, 1200);
 });
 
-googleSigninBtnEl.addEventListener("click", () => {
+// Both sign-in entry points first show the "note from developer" popup so the
+// supabase redirect domain isn't a surprise; continue then does the redirect.
+function requestGoogleSignIn(errorEl) {
   if (!supabaseConfigured()) {
-    showFormError(accountErrorEl, "sharing isn't set up on this build yet");
+    if (errorEl) showFormError(errorEl, "sharing isn't set up on this build yet");
     return;
   }
+  devNoteOverlayEl.classList.remove("hidden");
+}
+
+googleSigninBtnEl.addEventListener("click", () => requestGoogleSignIn(accountErrorEl));
+nicknameGoogleBtnEl.addEventListener("click", () => requestGoogleSignIn(nicknameErrorEl));
+
+devNoteContinueEl.addEventListener("click", () => {
+  devNoteOverlayEl.classList.add("hidden");
   startGoogleSignIn();
+});
+devNoteCancelEl.addEventListener("click", () => {
+  devNoteOverlayEl.classList.add("hidden");
+});
+devNoteOverlayEl.addEventListener("click", (e) => {
+  if (e.target === devNoteOverlayEl) devNoteOverlayEl.classList.add("hidden");
 });
 
 googleSignoutBtnEl.addEventListener("click", signOutGoogle);
