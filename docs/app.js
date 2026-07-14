@@ -2097,10 +2097,15 @@ async function refreshFriends() {
       p_code: trainer.code,
       p_secret: trainer.secret,
     });
-    friends = (data && data.friends) || [];
+    const nextFriends = (data && data.friends) || [];
+    // Rebuild the floor when the friend data changes, so friends' pokemon
+    // (and their task bubbles) appear/update instead of lagging a refresh.
+    const friendsChanged = JSON.stringify(nextFriends) !== JSON.stringify(friends);
+    friends = nextFriends;
     friendRequests = (data && data.requests) || [];
     saveFriends();
     saveRequests();
+    if (friendsChanged) renderParkMine();
     renderParkFriends();
     renderFriendRequests();
   } catch (e) {
