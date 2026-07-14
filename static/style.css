@@ -1117,6 +1117,26 @@ h1 {
   color: var(--text);
 }
 
+.park-floor {
+  position: relative;
+  height: 230px;
+  margin-top: 12px;
+  background: var(--team-card);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.park-actor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 34px;
+  width: auto;
+  image-rendering: pixelated;
+  will-change: transform;
+  pointer-events: none;
+}
+
 .park-friend {
   margin-top: 30px;
 }

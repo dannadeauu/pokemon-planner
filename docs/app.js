@@ -1707,6 +1707,137 @@ function schedulePushTeam() {
 
 // ---- the park: friends' teams ----
 
+// The pokepark floor: the first few team members roam the whole box like a
+// top-down patch of ground - wandering up/down and side to side, each hop a
+// little arc. They face their heading, bounce off the padded edges, and rest
+// a good while between short bursts so the hopping stays gentle, not busy.
+let parkFloorRaf = null;
+
+function renderParkFloor(sprites) {
+  if (parkFloorRaf) {
+    cancelAnimationFrame(parkFloorRaf);
+    parkFloorRaf = null;
+  }
+  const list = sprites.filter(Boolean).slice(0, 3);
+  if (list.length === 0) return;
+
+  const floor = document.createElement("div");
+  floor.className = "park-floor";
+  parkMineEl.appendChild(floor);
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const PAD = 8; // gap so they never touch the sides
+  const LIFT_MAX = 18; // tallest hop arc; also the top margin so it never clips
+
+  const actors = list.map((src, i) => {
+    const img = document.createElement("img");
+    img.className = "park-actor";
+    img.src = src;
+    img.alt = "";
+    floor.appendChild(img);
+    const angle = rand(0, Math.PI * 2);
+    return {
+      img,
+      w: 34,
+      h: 34,
+      sized: false,
+      x: 0,
+      y: 0,
+      hx: Math.cos(angle),
+      hy: Math.sin(angle),
+      face: 1,
+      phase: "rest",
+      // stagger the first move so they don't all start together
+      restUntil: performance.now() + rand(300, 2400) + i * 500,
+      hopsLeft: 0,
+      hop: null,
+    };
+  });
+
+  const startHop = (a, now, W, H) => {
+    const minX = PAD;
+    const maxX = Math.max(minX, W - a.w - PAD);
+    const minY = PAD + LIFT_MAX;
+    const maxY = Math.max(minY, H - a.h - PAD);
+    const step = rand(20, 40);
+    let nx = a.x + a.hx * step;
+    let ny = a.y + a.hy * step;
+    if (nx < minX || nx > maxX) {
+      a.hx = -a.hx; // reflect off the vertical walls
+      nx = a.x + a.hx * step;
+    }
+    if (ny < minY || ny > maxY) {
+      a.hy = -a.hy; // reflect off the top / bottom
+      ny = a.y + a.hy * step;
+    }
+    nx = Math.min(Math.max(nx, minX), maxX);
+    ny = Math.min(Math.max(ny, minY), maxY);
+    if (Math.abs(a.hx) > 0.15) a.face = a.hx > 0 ? -1 : 1; // face travel dir
+    a.hop = { t0: now, dur: rand(360, 470), x0: a.x, y0: a.y, x1: nx, y1: ny, lift: rand(10, LIFT_MAX) };
+  };
+
+  let placed = false;
+
+  const frame = (now) => {
+    const W = floor.clientWidth;
+    const H = floor.clientHeight;
+    if (W > 0 && !placed) {
+      actors.forEach((a, i) => {
+        if (a.img.offsetWidth) {
+          a.w = a.img.offsetWidth;
+          a.h = a.img.offsetHeight;
+          a.sized = true;
+        }
+        a.x = PAD + Math.max(0, W - a.w - PAD * 2) * ((i + 1) / (actors.length + 1));
+        a.y = (PAD + LIFT_MAX) + Math.max(0, H - a.h - PAD - (PAD + LIFT_MAX)) * rand(0.15, 0.85);
+      });
+      placed = true;
+    }
+    for (const a of actors) {
+      if (!a.sized && a.img.offsetWidth) {
+        a.w = a.img.offsetWidth;
+        a.h = a.img.offsetHeight;
+        a.sized = true;
+      }
+      let lift = 0;
+      if (a.phase === "rest" && now >= a.restUntil) {
+        a.hopsLeft = Math.round(rand(2, 4)); // a couple/few hops
+        const angle = rand(0, Math.PI * 2); // fresh heading each burst
+        a.hx = Math.cos(angle);
+        a.hy = Math.sin(angle);
+        startHop(a, now, W, H);
+        a.phase = "hop";
+      }
+      if (a.phase === "hop" && a.hop) {
+        const p = (now - a.hop.t0) / a.hop.dur;
+        if (p >= 1) {
+          a.x = a.hop.x1;
+          a.y = a.hop.y1;
+          a.hopsLeft -= 1;
+          if (a.hopsLeft > 0) {
+            startHop(a, now, W, H);
+          } else {
+            a.phase = "rest";
+            a.restUntil = now + rand(2400, 5500); // long, varied pause
+            a.hop = null;
+          }
+        } else {
+          a.x = a.hop.x0 + (a.hop.x1 - a.hop.x0) * p;
+          a.y = a.hop.y0 + (a.hop.y1 - a.hop.y0) * p;
+          lift = a.hop.lift * 4 * p * (1 - p); // parabolic hop arc
+        }
+      }
+      const maxX = Math.max(PAD, W - a.w - PAD);
+      const maxY = Math.max(PAD + LIFT_MAX, H - a.h - PAD);
+      a.x = Math.min(Math.max(a.x, PAD), maxX);
+      a.y = Math.min(Math.max(a.y, PAD + LIFT_MAX), maxY);
+      a.img.style.transform =
+        `translate(${a.x.toFixed(1)}px, ${(a.y - lift).toFixed(1)}px) scaleX(${a.face})`;
+    }
+    parkFloorRaf = requestAnimationFrame(frame);
+  };
+  parkFloorRaf = requestAnimationFrame(frame);
+}
 function renderParkMine() {
   parkMineEl.innerHTML = "";
 
@@ -1743,6 +1874,8 @@ function renderParkMine() {
   });
   parkMineEl.appendChild(msg);
   autosize();
+
+  renderParkFloor(lastTeamTodos.slice(0, 3).map((t) => t.pokemon.icon));
 }
 
 function renderParkFriends() {
@@ -2111,15 +2244,16 @@ async function copyTrainerCode() {
 // Instagram, etc). Where that isn't available, it copies text + link instead.
 async function shareInvite() {
   const url = appLink();
+  const text = trainer ? `${INVITE_MESSAGE}: ${trainer.code}` : INVITE_MESSAGE;
   if (navigator.share) {
     try {
-      await navigator.share({ text: INVITE_MESSAGE, url });
+      await navigator.share({ text, url });
     } catch (e) {
       // user dismissed the share sheet - nothing to do
     }
     return;
   }
-  const ok = await writeClipboard(`${INVITE_MESSAGE} ${url}`);
+  const ok = await writeClipboard(`${text} ${url}`);
   if (!ok) return;
   shareLinkBtnEl.innerHTML = CHECK_ICON_HTML;
   setTimeout(() => {
