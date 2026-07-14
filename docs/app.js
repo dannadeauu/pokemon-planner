@@ -1563,6 +1563,7 @@ const friendRequestsListEl = document.getElementById("friend-requests-list");
 const removeFriendOverlayEl = document.getElementById("remove-friend-overlay");
 const removeFriendYesEl = document.getElementById("remove-friend-yes");
 const removeFriendNoEl = document.getElementById("remove-friend-no");
+const shareTasksToggleEl = document.getElementById("share-tasks-toggle");
 
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -1645,6 +1646,11 @@ function saveRequests() {
 const PARK_MSG_KEY = "todo-app-park-message";
 let parkMessage = localStorage.getItem(PARK_MSG_KEY) || "";
 
+// Whether this device shares its task text with friends. Default on; when off,
+// task strings are left out of the pushed snapshot entirely.
+const SHARE_TASKS_KEY = "todo-app-share-tasks";
+let shareTasks = localStorage.getItem(SHARE_TASKS_KEY) !== "0";
+
 // Local fallback used only when no Supabase project is configured; a
 // registered trainer gets a server-generated code instead so it's unique.
 function generateTrainerCode() {
@@ -1672,6 +1678,8 @@ function buildTeamSnapshot() {
     dex_id: t.pokemon.dex_id,
     shiny: Boolean(t.pokemon.shiny),
     sprite: t.pokemon.sprite,
+    icon: t.pokemon.icon,
+    task: shareTasks && t.text ? t.text : null,
   }));
   const total = lastTeamTodos.length;
   const done = lastTeamTodos.filter((t) => t.status === "done!").length;
@@ -1707,37 +1715,87 @@ function schedulePushTeam() {
 
 // ---- the park: friends' teams ----
 
-// The pokepark floor: the first few team members roam the whole box like a
-// top-down patch of ground - wandering up/down and side to side, each hop a
-// little arc. They face their heading, bounce off the padded edges, and rest
-// a good while between short bursts so the hopping stays gentle, not busy.
+// Turn a showdown slug into something readable for the speech bubble.
+function prettyPokeName(n) {
+  return String(n)
+    .replace(/-megax$/, " mega x")
+    .replace(/-megay$/, " mega y")
+    .replace(/-mega$/, " mega")
+    .replace(/-/g, " ");
+}
+
+// The pokepark floor: this device's first two pokemon plus each friend's
+// first two roam the whole box like a top-down field - wandering up/down and
+// side to side, each hop a little arc, facing their heading and bouncing off
+// the padded edges, resting a good while between short bursts. Tapping one
+// stops it and pops a small speech bubble naming its owner + pokemon (and the
+// associated task, when that owner shares task info).
 let parkFloorRaf = null;
 
-function renderParkFloor(sprites) {
+function renderParkFloor(actorData) {
   if (parkFloorRaf) {
     cancelAnimationFrame(parkFloorRaf);
     parkFloorRaf = null;
   }
-  const list = sprites.filter(Boolean).slice(0, 3);
+  const list = (actorData || []).filter((d) => d && d.icon).slice(0, 30);
   if (list.length === 0) return;
 
   const floor = document.createElement("div");
   floor.className = "park-floor";
   parkMineEl.appendChild(floor);
 
+  const bubble = document.createElement("div");
+  bubble.className = "park-bubble hidden";
+  parkMineEl.appendChild(bubble);
+
   const rand = (a, b) => a + Math.random() * (b - a);
   const PAD = 8; // gap so they never touch the sides
   const LIFT_MAX = 18; // tallest hop arc; also the top margin so it never clips
 
-  const actors = list.map((src, i) => {
+  let pausedActor = null;
+
+  function showBubble(a) {
+    hideBubble();
+    pausedActor = a;
+    a.paused = true;
+    a.phase = "rest";
+    a.hop = null;
+    a.hopsLeft = 0;
+    bubble.innerHTML = "";
+    const title = document.createElement("div");
+    title.className = "bubble-title";
+    title.textContent = `${a.data.nickname}'s ${prettyPokeName(a.data.name)}`;
+    bubble.appendChild(title);
+    if (a.data.task) {
+      const task = document.createElement("div");
+      task.className = "bubble-task";
+      task.textContent = a.data.task;
+      bubble.appendChild(task);
+    }
+    bubble.classList.remove("hidden");
+  }
+
+  function hideBubble() {
+    if (pausedActor) {
+      pausedActor.paused = false;
+      pausedActor.restUntil = performance.now() + rand(300, 1000);
+      pausedActor = null;
+    }
+    bubble.classList.add("hidden");
+  }
+
+  floor.addEventListener("click", () => hideBubble());
+
+  const actors = list.map((d, i) => {
     const img = document.createElement("img");
     img.className = "park-actor";
-    img.src = src;
-    img.alt = "";
+    img.src = d.icon;
+    img.alt = d.name || "";
     floor.appendChild(img);
     const angle = rand(0, Math.PI * 2);
-    return {
+    const a = {
       img,
+      data: d,
       w: 34,
       h: 34,
       sized: false,
@@ -1747,11 +1805,17 @@ function renderParkFloor(sprites) {
       hy: Math.sin(angle),
       face: 1,
       phase: "rest",
-      // stagger the first move so they don't all start together
-      restUntil: performance.now() + rand(300, 2400) + i * 500,
+      restUntil: performance.now() + rand(300, 2400) + i * 400,
       hopsLeft: 0,
       hop: null,
+      paused: false,
     };
+    img.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (pausedActor === a) hideBubble();
+      else showBubble(a);
+    });
+    return a;
   });
 
   const startHop = (a, now, W, H) => {
@@ -1788,7 +1852,7 @@ function renderParkFloor(sprites) {
           a.h = a.img.offsetHeight;
           a.sized = true;
         }
-        a.x = PAD + Math.max(0, W - a.w - PAD * 2) * ((i + 1) / (actors.length + 1));
+        a.x = PAD + Math.max(0, W - a.w - PAD * 2) * ((i + 0.5) / actors.length);
         a.y = (PAD + LIFT_MAX) + Math.max(0, H - a.h - PAD - (PAD + LIFT_MAX)) * rand(0.15, 0.85);
       });
       placed = true;
@@ -1798,6 +1862,11 @@ function renderParkFloor(sprites) {
         a.w = a.img.offsetWidth;
         a.h = a.img.offsetHeight;
         a.sized = true;
+      }
+      if (a.paused) {
+        a.img.style.transform =
+          `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) scaleX(${a.face})`;
+        continue;
       }
       let lift = 0;
       if (a.phase === "rest" && now >= a.restUntil) {
@@ -1833,6 +1902,18 @@ function renderParkFloor(sprites) {
       a.y = Math.min(Math.max(a.y, PAD + LIFT_MAX), maxY);
       a.img.style.transform =
         `translate(${a.x.toFixed(1)}px, ${(a.y - lift).toFixed(1)}px) scaleX(${a.face})`;
+    }
+    if (pausedActor && !bubble.classList.contains("hidden")) {
+      const a = pausedActor;
+      const above = a.y > 52;
+      bubble.classList.toggle("below", !above);
+      // center on the pokemon, but clamp so the bubble never clips off-screen
+      let left = floor.offsetLeft + a.x + a.w / 2;
+      const bw = bubble.offsetWidth;
+      const cw = parkMineEl.clientWidth;
+      left = Math.min(Math.max(left, bw / 2 + 6), cw - bw / 2 - 6);
+      bubble.style.left = `${left}px`;
+      bubble.style.top = `${floor.offsetTop + a.y + (above ? 0 : a.h)}px`;
     }
     parkFloorRaf = requestAnimationFrame(frame);
   };
@@ -1875,7 +1956,30 @@ function renderParkMine() {
   parkMineEl.appendChild(msg);
   autosize();
 
-  renderParkFloor(lastTeamTodos.slice(0, 3).map((t) => t.pokemon.icon));
+  // Populate the floor: this device's first two, plus each friend's first two.
+  const myNick = trainer ? trainer.nickname : "me";
+  const floorActors = [];
+  for (const t of lastTeamTodos.slice(0, 2)) {
+    floorActors.push({
+      icon: t.pokemon.icon,
+      nickname: myNick,
+      name: t.pokemon.name,
+      task: shareTasks && t.text ? t.text : null,
+    });
+  }
+  for (const friend of friends) {
+    const team =
+      friend.snapshot && Array.isArray(friend.snapshot.team) ? friend.snapshot.team : [];
+    for (const p of team.slice(0, 2)) {
+      floorActors.push({
+        icon: p.icon || dexIconUrl(p.dex_id, p.shiny),
+        nickname: friend.nickname,
+        name: p.name,
+        task: typeof p.task === "string" && p.task ? p.task : null,
+      });
+    }
+  }
+  renderParkFloor(floorActors);
 }
 
 function renderParkFriends() {
@@ -2104,6 +2208,8 @@ function renderFriendsMenu() {
     friendsCodeValueEl.textContent = trainer.code;
     friendsEmptyEl.classList.toggle("hidden", friends.length > 0);
     renderFriendRequests();
+    shareTasksToggleEl.classList.toggle("on", shareTasks);
+    shareTasksToggleEl.setAttribute("aria-checked", String(shareTasks));
   }
 }
 
@@ -2116,6 +2222,15 @@ friendsFabEl.addEventListener("click", () => {
   renderFriendsMenu();
   friendsOverlayEl.classList.remove("hidden");
   refreshFriends();
+});
+
+shareTasksToggleEl.addEventListener("click", () => {
+  shareTasks = !shareTasks;
+  localStorage.setItem(SHARE_TASKS_KEY, shareTasks ? "1" : "0");
+  shareTasksToggleEl.classList.toggle("on", shareTasks);
+  shareTasksToggleEl.setAttribute("aria-checked", String(shareTasks));
+  schedulePushTeam(); // re-push so friends' bubbles reflect the change
+  renderParkMine(); // rebuild the floor with/without task text
 });
 friendsCloseEl.addEventListener("click", closeFriends);
 friendsOverlayEl.addEventListener("click", (e) => {
