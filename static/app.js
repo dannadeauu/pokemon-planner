@@ -1281,7 +1281,7 @@ const friendRequestsListEl = document.getElementById("friend-requests-list");
 const removeFriendOverlayEl = document.getElementById("remove-friend-overlay");
 const removeFriendYesEl = document.getElementById("remove-friend-yes");
 const removeFriendNoEl = document.getElementById("remove-friend-no");
-const shareTasksToggleEl = document.getElementById("share-tasks-toggle");
+const hideTasksToggleEl = document.getElementById("hide-tasks-toggle");
 
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -1366,8 +1366,8 @@ let parkMessage = localStorage.getItem(PARK_MSG_KEY) || "";
 
 // Whether this device shares its task text with friends. Default on; when off,
 // task strings are left out of the pushed snapshot entirely.
-const SHARE_TASKS_KEY = "todo-app-share-tasks";
-let shareTasks = localStorage.getItem(SHARE_TASKS_KEY) !== "0";
+const HIDE_TASKS_KEY = "todo-app-hide-tasks";
+let hideTasks = localStorage.getItem(HIDE_TASKS_KEY) === "1";
 
 // Local fallback used only when no Supabase project is configured; a
 // registered trainer gets a server-generated code instead so it's unique.
@@ -1397,7 +1397,7 @@ function buildTeamSnapshot() {
     shiny: Boolean(t.pokemon.shiny),
     sprite: t.pokemon.sprite,
     icon: t.pokemon.icon,
-    task: shareTasks && t.text ? t.text : null,
+    task: !hideTasks && t.text ? t.text : null,
   }));
   const total = lastTeamTodos.length;
   const done = lastTeamTodos.filter((t) => t.status === "done!").length;
@@ -1472,34 +1472,67 @@ function renderParkFloor(actorData) {
 
   let pausedActor = null;
 
+  let hideTimer = null;
+
+  function positionBubble(a) {
+    const above = a.y > 52;
+    bubble.classList.toggle("below", !above);
+    // center on the pokemon, clamped so the bubble never clips off-screen
+    let left = floor.offsetLeft + a.x + a.w / 2;
+    const bw = bubble.offsetWidth;
+    const cw = parkMineEl.clientWidth;
+    left = Math.min(Math.max(left, bw / 2 + 6), cw - bw / 2 - 6);
+    bubble.style.left = `${left}px`;
+    bubble.style.top = `${floor.offsetTop + a.y + (above ? 0 : a.h)}px`;
+  }
+
   function showBubble(a) {
-    hideBubble();
+    clearTimeout(hideTimer);
+    if (pausedActor && pausedActor !== a) {
+      pausedActor.paused = false;
+      pausedActor.restUntil = performance.now() + rand(300, 1000);
+    }
     pausedActor = a;
     a.paused = true;
     a.phase = "rest";
     a.hop = null;
     a.hopsLeft = 0;
-    bubble.innerHTML = "";
+
+    const inner = document.createElement("div");
+    inner.className = "park-bubble-inner";
     const title = document.createElement("div");
     title.className = "bubble-title";
     title.textContent = `${a.data.nickname}'s ${prettyPokeName(a.data.name)}`;
-    bubble.appendChild(title);
+    inner.appendChild(title);
     if (a.data.task) {
       const task = document.createElement("div");
       task.className = "bubble-task";
       task.textContent = a.data.task;
-      bubble.appendChild(task);
+      inner.appendChild(task);
     }
+    bubble.classList.remove("show");
+    bubble.innerHTML = "";
+    bubble.appendChild(inner);
     bubble.classList.remove("hidden");
+    positionBubble(a);
+    // reflow so the rise + fade-in transition plays from its hidden start
+    void bubble.offsetWidth;
+    bubble.classList.add("show");
   }
 
   function hideBubble() {
-    if (pausedActor) {
-      pausedActor.paused = false;
-      pausedActor.restUntil = performance.now() + rand(300, 1000);
-      pausedActor = null;
+    if (!pausedActor) {
+      bubble.classList.remove("show");
+      bubble.classList.add("hidden");
+      return;
     }
-    bubble.classList.add("hidden");
+    pausedActor.paused = false;
+    pausedActor.restUntil = performance.now() + rand(300, 1000);
+    pausedActor = null;
+    // play the fall + fade-out, then drop it from layout
+    bubble.classList.remove("show");
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => bubble.classList.add("hidden"), 180);
   }
 
   floor.addEventListener("click", () => hideBubble());
@@ -1621,18 +1654,7 @@ function renderParkFloor(actorData) {
       a.img.style.transform =
         `translate(${a.x.toFixed(1)}px, ${(a.y - lift).toFixed(1)}px) scaleX(${a.face})`;
     }
-    if (pausedActor && !bubble.classList.contains("hidden")) {
-      const a = pausedActor;
-      const above = a.y > 52;
-      bubble.classList.toggle("below", !above);
-      // center on the pokemon, but clamp so the bubble never clips off-screen
-      let left = floor.offsetLeft + a.x + a.w / 2;
-      const bw = bubble.offsetWidth;
-      const cw = parkMineEl.clientWidth;
-      left = Math.min(Math.max(left, bw / 2 + 6), cw - bw / 2 - 6);
-      bubble.style.left = `${left}px`;
-      bubble.style.top = `${floor.offsetTop + a.y + (above ? 0 : a.h)}px`;
-    }
+    if (pausedActor) positionBubble(pausedActor);
     parkFloorRaf = requestAnimationFrame(frame);
   };
   parkFloorRaf = requestAnimationFrame(frame);
@@ -1682,7 +1704,7 @@ function renderParkMine() {
       icon: t.pokemon.icon,
       nickname: myNick,
       name: t.pokemon.name,
-      task: shareTasks && t.text ? t.text : null,
+      task: !hideTasks && t.text ? t.text : null,
     });
   }
   for (const friend of friends) {
@@ -1926,8 +1948,8 @@ function renderFriendsMenu() {
     friendsCodeValueEl.textContent = trainer.code;
     friendsEmptyEl.classList.toggle("hidden", friends.length > 0);
     renderFriendRequests();
-    shareTasksToggleEl.classList.toggle("on", shareTasks);
-    shareTasksToggleEl.setAttribute("aria-checked", String(shareTasks));
+    hideTasksToggleEl.classList.toggle("on", hideTasks);
+    hideTasksToggleEl.setAttribute("aria-checked", String(hideTasks));
   }
 }
 
@@ -1942,11 +1964,11 @@ friendsFabEl.addEventListener("click", () => {
   refreshFriends();
 });
 
-shareTasksToggleEl.addEventListener("click", () => {
-  shareTasks = !shareTasks;
-  localStorage.setItem(SHARE_TASKS_KEY, shareTasks ? "1" : "0");
-  shareTasksToggleEl.classList.toggle("on", shareTasks);
-  shareTasksToggleEl.setAttribute("aria-checked", String(shareTasks));
+hideTasksToggleEl.addEventListener("click", () => {
+  hideTasks = !hideTasks;
+  localStorage.setItem(HIDE_TASKS_KEY, hideTasks ? "1" : "0");
+  hideTasksToggleEl.classList.toggle("on", hideTasks);
+  hideTasksToggleEl.setAttribute("aria-checked", String(hideTasks));
   schedulePushTeam(); // re-push so friends' bubbles reflect the change
   renderParkMine(); // rebuild the floor with/without task text
 });

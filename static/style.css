@@ -1144,18 +1144,8 @@ h1 {
 .park-bubble {
   position: absolute;
   z-index: 6;
-  max-width: 180px;
-  padding: 7px 11px;
-  border-radius: 12px;
-  background: #202127;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.25;
-  text-align: center;
   pointer-events: none;
   transform: translate(-50%, calc(-100% - 9px));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .park-bubble.below {
@@ -1166,7 +1156,31 @@ h1 {
   display: none;
 }
 
-.park-bubble::after {
+.park-bubble-inner {
+  position: relative;
+  max-width: 180px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: #202127;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  /* start low + transparent; the .show class rises it up and fades it in,
+     and removing .show drops it back down while fading out */
+  opacity: 0;
+  transform: translateY(9px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.park-bubble.show .park-bubble-inner {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.park-bubble-inner::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -1174,12 +1188,12 @@ h1 {
   border: 5px solid transparent;
 }
 
-.park-bubble:not(.below)::after {
+.park-bubble:not(.below) .park-bubble-inner::after {
   top: 100%;
   border-top-color: #202127;
 }
 
-.park-bubble.below::after {
+.park-bubble.below .park-bubble-inner::after {
   bottom: 100%;
   border-bottom-color: #202127;
 }
