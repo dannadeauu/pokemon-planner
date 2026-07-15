@@ -175,6 +175,14 @@ function saveTaskStore() {
   localStorage.setItem(TASKS_KEY, JSON.stringify(taskStore));
 }
 
+// A local task edit: stamp when it happened, persist it, and (if signed in)
+// back it up to the account so it reaches this user's other devices.
+function commitTaskChange() {
+  taskStore.updatedAt = new Date().toISOString();
+  saveTaskStore();
+  scheduleTaskSync();
+}
+
 function pokemonFor(todo) {
   const stage = STATUSES.indexOf(todo.status);
   const [dexIds, names] = POKEMON_FAMILIES[todo.pokemon_family];
@@ -233,7 +241,7 @@ function storeCreateTodo(text) {
     position: newPosition,
     created_at: new Date().toISOString(),
   });
-  saveTaskStore();
+  commitTaskChange();
 }
 
 function storeUpdateTodo(id, changes) {
@@ -248,12 +256,12 @@ function storeUpdateTodo(id, changes) {
   if (changes.text !== undefined && changes.text.trim()) {
     todo.text = changes.text.trim();
   }
-  saveTaskStore();
+  commitTaskChange();
 }
 
 function storeDeleteTodo(id) {
   taskStore.todos = taskStore.todos.filter((t) => t.id !== id);
-  saveTaskStore();
+  commitTaskChange();
 }
 
 function storeMegaEvolve(id, variant) {
@@ -263,7 +271,7 @@ function storeMegaEvolve(id, variant) {
   if (!megaOptions || variant < 0 || variant >= megaOptions.length) return;
   todo.is_mega = 1;
   todo.mega_variant = variant;
-  saveTaskStore();
+  commitTaskChange();
 }
 
 function storeReorder(order) {
@@ -271,7 +279,7 @@ function storeReorder(order) {
     const todo = taskStore.todos.find((t) => t.id === id);
     if (todo) todo.position = index;
   });
-  saveTaskStore();
+  commitTaskChange();
 }
 
 function computeStats() {
@@ -2660,6 +2668,76 @@ async function syncTrainerWithAccount() {
   }
 }
 
+// ---- cross-device task sync (signed-in accounts) ----
+// A signed-in user's whole task list is backed up to their account and
+// restored on any device they sign in on. Conflicts resolve last-write-wins by
+// timestamp: whichever device edited most recently wins. Everything degrades
+// gracefully - offline or before tasks.sql is run, these just no-op locally.
+let lastSyncedTasks = null;
+let taskSyncTimer = null;
+
+function taskSyncPayload() {
+  return { nextId: taskStore.nextId, todos: taskStore.todos };
+}
+
+function scheduleTaskSync() {
+  if (!authSession || !supabaseConfigured()) return;
+  clearTimeout(taskSyncTimer);
+  taskSyncTimer = setTimeout(pushTasks, 1500);
+}
+
+async function pushTasks() {
+  if (!authSession || !supabaseConfigured()) return;
+  const payload = taskSyncPayload();
+  const body = JSON.stringify(payload);
+  if (body === lastSyncedTasks) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    await supabaseRpc("push_tasks", { p_data: payload }, authSession.access_token);
+    lastSyncedTasks = body;
+  } catch (e) {
+    // offline or tasks.sql not run yet - the next change retries
+  }
+}
+
+async function pullTasks() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    const remote = await supabaseRpc("get_tasks", {}, authSession.access_token);
+    if (!remote || !remote.data) {
+      // nothing backed up yet: seed the account from this device
+      lastSyncedTasks = null;
+      if (taskStore.todos.length) scheduleTaskSync();
+      return;
+    }
+    const remoteMs = remote.updated_at ? Date.parse(remote.updated_at) : 0;
+    const localMs = taskStore.updatedAt ? Date.parse(taskStore.updatedAt) : 0;
+    if (remoteMs >= localMs) {
+      // the account's list is newer (or this device has no edits yet): adopt it
+      const data = remote.data;
+      const before = JSON.stringify(taskSyncPayload()); // what's rendered now
+      taskStore.todos = Array.isArray(data.todos) ? data.todos : [];
+      taskStore.nextId = Number.isInteger(data.nextId)
+        ? data.nextId
+        : taskStore.todos.reduce((m, t) => Math.max(m, t.id), 0) + 1;
+      taskStore.updatedAt = remote.updated_at;
+      saveTaskStore();
+      const after = JSON.stringify(taskSyncPayload());
+      lastSyncedTasks = after;
+      if (after !== before) refresh(); // only re-render when the list changed
+    } else {
+      // this device edited more recently: push it up
+      lastSyncedTasks = null;
+      scheduleTaskSync();
+    }
+  } catch (e) {
+    // offline or tasks.sql not run yet
+  }
+}
+
 // Supabase sends OAuth tokens back in the URL hash after the Google redirect.
 async function handleAuthRedirect() {
   if (!location.hash) return;
@@ -2692,6 +2770,7 @@ async function handleAuthRedirect() {
   }
   saveAuthSession();
   await syncTrainerWithAccount();
+  await pullTasks();
 }
 
 async function ensureFreshAuth() {
@@ -2725,6 +2804,9 @@ async function signOutGoogle() {
   const token = authSession ? authSession.access_token : null;
   authSession = null;
   saveAuthSession();
+  // Keep the tasks on this device, but forget the sync state so signing back
+  // in (or a different account) re-evaluates against the cloud cleanly.
+  lastSyncedTasks = null;
   renderAccountView();
   if (token) {
     try {
@@ -2861,8 +2943,16 @@ if (supabaseConfigured()) {
   (async () => {
     await handleAuthRedirect();
     await ensureFreshAuth();
+    // Already signed in from a previous visit: pull this account's latest tasks.
+    await pullTasks();
   })();
 }
+
+// Coming back to the app (switching devices, reopening the tab) re-pulls so the
+// list reflects edits made on another device.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) pullTasks();
+});
 
 for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {
