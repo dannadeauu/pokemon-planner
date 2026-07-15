@@ -115,7 +115,10 @@
         </div>
         <div class="color-row">
           <label for="color-done">done!</label>
-          <input type="color" id="color-done" />
+          <div class="color-row-controls">
+            <button type="button" class="match-companion-btn" id="match-companion-done-btn">match companion</button>
+            <input type="color" id="color-done" />
+          </div>
         </div>
       </div>
 
@@ -233,6 +236,14 @@
       <h3 class="dev-note-title">remove friend?</h3>
       <button class="friends-btn" id="remove-friend-no" type="button">no</button>
       <button class="friends-btn friends-btn-secondary" id="remove-friend-yes" type="button">yes</button>
+    </div>
+  </div>
+
+  <div class="dev-note-overlay hidden" id="delete-task-overlay">
+    <div class="dev-note-box remove-friend-box">
+      <h3 class="dev-note-title">delete this task?</h3>
+      <button class="friends-btn" id="delete-task-no" type="button">no</button>
+      <button class="friends-btn friends-btn-secondary" id="delete-task-yes" type="button">yes</button>
     </div>
   </div>
 

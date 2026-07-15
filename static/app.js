@@ -104,6 +104,7 @@ const DEFAULT_SETTINGS = {
   },
   companion: "",
   matchCompanion: false,
+  matchCompanionDone: false,
 };
 
 function loadSettings() {
@@ -288,6 +289,7 @@ const COMPANION_ACCENTS = {
 };
 
 const matchCompanionBtnEl = document.getElementById("match-companion-btn");
+const matchCompanionDoneBtnEl = document.getElementById("match-companion-done-btn");
 
 function computeCompanionAccent() {
   if (!settings.companion) return NO_COMPANION_ACCENT;
@@ -295,15 +297,23 @@ function computeCompanionAccent() {
   return COMPANION_ACCENTS[key] || COMPANION_ACCENTS[settings.companion] || NO_COMPANION_ACCENT;
 }
 
-function updateMatchCompanionButton() {
+function updateMatchCompanionButtons() {
   matchCompanionBtnEl.classList.toggle("active", Boolean(settings.matchCompanion));
+  matchCompanionDoneBtnEl.classList.toggle("active", Boolean(settings.matchCompanionDone));
 }
 
 function applyMatchCompanion() {
-  if (!settings.matchCompanion) return;
   const accent = computeCompanionAccent();
-  if (settings.colors.add !== accent) {
+  let changed = false;
+  if (settings.matchCompanion && settings.colors.add !== accent) {
     settings.colors.add = accent;
+    changed = true;
+  }
+  if (settings.matchCompanionDone && settings.colors.done !== accent) {
+    settings.colors.done = accent;
+    changed = true;
+  }
+  if (changed) {
     saveSettings(settings);
     applyColors();
   }
@@ -314,13 +324,20 @@ function initSettings() {
   applyColors();
   populateCompanionSelect();
   applyCompanion();
-  updateMatchCompanionButton();
+  updateMatchCompanionButtons();
   applyMatchCompanion();
 
   matchCompanionBtnEl.addEventListener("click", () => {
     settings.matchCompanion = !settings.matchCompanion;
     saveSettings(settings);
-    updateMatchCompanionButton();
+    updateMatchCompanionButtons();
+    applyMatchCompanion();
+  });
+
+  matchCompanionDoneBtnEl.addEventListener("click", () => {
+    settings.matchCompanionDone = !settings.matchCompanionDone;
+    saveSettings(settings);
+    updateMatchCompanionButtons();
     applyMatchCompanion();
   });
 
@@ -350,10 +367,9 @@ function initSettings() {
   };
   for (const [id, key] of Object.entries(colorInputs)) {
     document.getElementById(id).addEventListener("input", (e) => {
-      if (id === "color-add") {
-        settings.matchCompanion = false;
-        updateMatchCompanionButton();
-      }
+      if (id === "color-add") settings.matchCompanion = false;
+      if (id === "color-done") settings.matchCompanionDone = false;
+      updateMatchCompanionButtons();
       settings.colors[key] = e.target.value;
       saveSettings(settings);
       applyColors();
@@ -597,7 +613,7 @@ function renderTodoItem(todo) {
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "delete-btn";
   deleteBtn.textContent = "✕";
-  deleteBtn.addEventListener("click", () => deleteTodo(todo.id));
+  deleteBtn.addEventListener("click", () => askDeleteTodo(todo.id));
 
   li.append(handle, text, select, sprite);
 
@@ -775,6 +791,32 @@ async function deleteTodo(id) {
   refresh();
 }
 
+// Deleting a task from "my team" goes through a small yes/no confirmation.
+const deleteTaskOverlayEl = document.getElementById("delete-task-overlay");
+const deleteTaskYesEl = document.getElementById("delete-task-yes");
+const deleteTaskNoEl = document.getElementById("delete-task-no");
+let pendingDeleteId = null;
+
+function askDeleteTodo(id) {
+  pendingDeleteId = id;
+  deleteTaskOverlayEl.classList.remove("hidden");
+}
+
+function closeDeleteConfirm() {
+  pendingDeleteId = null;
+  deleteTaskOverlayEl.classList.add("hidden");
+}
+
+deleteTaskNoEl.addEventListener("click", closeDeleteConfirm);
+deleteTaskYesEl.addEventListener("click", () => {
+  const id = pendingDeleteId;
+  closeDeleteConfirm();
+  if (id != null) deleteTodo(id);
+});
+deleteTaskOverlayEl.addEventListener("click", (e) => {
+  if (e.target === deleteTaskOverlayEl) closeDeleteConfirm();
+});
+
 async function megaEvolve(id, variant) {
   await fetch(`/api/todos/${id}/mega`, {
     method: "POST",
@@ -896,7 +938,9 @@ function renderPokedex(pokemon, d) {
   for (const s of d.stats) {
     const base = s.base_stat;
     total += base;
-    const width = Math.min(100, (base / 255) * 100);
+    // Scale bars to a 200 "full" reference (not the rare 255 max) so typical
+    // stats fill more of the track instead of bunching up on the left.
+    const width = Math.min(100, (base / 200) * 100);
     statsRows +=
       `<div class="stat-row">` +
       `<span class="stat-name">${STAT_LABELS[s.stat.name] || s.stat.name}</span>` +
@@ -1035,36 +1079,73 @@ function getDexEntries() {
 let dexActiveTab = "all";
 
 // The "special" tab is a fixed set of mythical/legendary pokemon that only ever
-// visit the pokepark by chance. They stay silhouetted with a "???" label - the
-// whole point is the mystery - and tapping any of them opens the hint menu
-// below rather than a real dex entry.
-const SPECIAL_DEX_ENTRIES = [
-  482, // azelf
-  480, // uxie
-  481, // mesprit
-  489, // phione
-  490, // manaphy
-  494, // victini
-  492, // shaymin (land)
-  10006, // shaymin (sky)
-  647, // keldeo
-  802, // marshadow
+// visit the pokepark by chance. Until registered they stay silhouetted (though
+// their national dex number always shows), and tapping one opens the hint menu.
+// Each one that has visited the park and been tapped fills in with a real dex
+// entry, just like the other tabs.
+const SPECIAL_POKEMON = [
+  { dex: 482, name: "azelf", label: "0482" },
+  { dex: 480, name: "uxie", label: "0480" },
+  { dex: 481, name: "mesprit", label: "0481" },
+  { dex: 489, name: "phione", label: "0489" },
+  { dex: 490, name: "manaphy", label: "0490" },
+  { dex: 494, name: "victini", label: "0494" },
+  { dex: 492, name: "shaymin", label: "0492" },
+  { dex: 10006, name: "shaymin-sky", label: "0492 S" },
+  { dex: 647, name: "keldeo", label: "0647" },
+  { dex: 802, name: "marshadow", label: "0802" },
 ];
+
+const SPECIAL_KEY = "todo-app-special-dex";
+
+function loadSpecialRegistered() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SPECIAL_KEY));
+    if (stored && typeof stored === "object") return stored;
+  } catch (e) {
+    // fall through to a fresh set
+  }
+  return {};
+}
+
+const specialRegistered = loadSpecialRegistered();
+
+function registerSpecial(dex) {
+  if (!specialRegistered[String(dex)]) {
+    specialRegistered[String(dex)] = true;
+    localStorage.setItem(SPECIAL_KEY, JSON.stringify(specialRegistered));
+  }
+}
+
+function specialPokemonPayload(entry) {
+  return {
+    name: entry.name,
+    dex_id: entry.dex,
+    shiny: false,
+    sprite: `https://play.pokemonshowdown.com/sprites/ani/${entry.name}.gif`,
+    icon: dexIconUrl(entry.dex, false),
+  };
+}
 
 function renderSpecialGrid() {
   dexGridEl.innerHTML = "";
-  for (const dex of SPECIAL_DEX_ENTRIES) {
+  for (const entry of SPECIAL_POKEMON) {
+    const registered = Boolean(specialRegistered[String(entry.dex)]);
     const cell = document.createElement("div");
-    cell.className = "dex-cell undiscovered special";
+    cell.className = "dex-cell special " + (registered ? "discovered" : "undiscovered");
     const img = document.createElement("img");
     img.loading = "lazy";
-    img.src = dexIconUrl(dex, false);
-    img.alt = "undiscovered";
+    img.src = dexIconUrl(entry.dex, false);
+    img.alt = registered ? entry.name : "undiscovered";
     const num = document.createElement("span");
     num.className = "dex-num";
-    num.textContent = "???";
+    num.textContent = entry.label;
     cell.append(img, num);
-    cell.addEventListener("click", openSpecialEntry);
+    if (registered) {
+      cell.addEventListener("click", () => openPokedex(specialPokemonPayload(entry)));
+    } else {
+      cell.addEventListener("click", openSpecialEntry);
+    }
     dexGridEl.appendChild(cell);
   }
 }
@@ -1076,6 +1157,59 @@ function openSpecialEntry() {
     `<h2 class="pokedex-title">???</h2>` +
     `<p class="pokedex-desc">there's a small daily chance this pokemon will visit your pokepark. keep your eye out!</p>`;
   pokedexOverlayEl.classList.remove("hidden");
+}
+
+// Registering a special visitor from the park: mark it discovered, then show a
+// "registered!" header above its full, standard dex entry.
+async function openSpecialRegister(entry) {
+  registerSpecial(entry.dex);
+  if (dexActiveTab === "special") renderSpecialGrid();
+
+  const oldBlur = pokedexPanelEl.querySelector(".team-blur-bg");
+  if (oldBlur) oldBlur.remove();
+  pokedexContentEl.innerHTML = '<p class="pokedex-loading">loading...</p>';
+  pokedexOverlayEl.classList.remove("hidden");
+  try {
+    const data = await fetchDexData(entry.dex);
+    renderPokedex(specialPokemonPayload(entry), data);
+    pokedexContentEl.insertAdjacentHTML(
+      "afterbegin",
+      '<h2 class="pokedex-registered">registered!</h2>'
+    );
+  } catch {
+    pokedexContentEl.innerHTML =
+      "<p class=\"pokedex-loading\">couldn't load pokedex data - check your connection.</p>";
+  }
+}
+
+// Once a day, a 5% roll decides whether one random special pokemon visits the
+// park. The result is cached for the day so re-renders don't re-roll.
+const SPECIAL_VISIT_KEY = "todo-app-special-visit";
+const SPECIAL_VISIT_CHANCE = 0.05;
+
+function specialTodayStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function getSpecialVisitor() {
+  let record = null;
+  try {
+    record = JSON.parse(localStorage.getItem(SPECIAL_VISIT_KEY));
+  } catch (e) {
+    // fall through to a fresh roll
+  }
+  const today = specialTodayStamp();
+  if (!record || record.date !== today) {
+    let dex = null;
+    if (Math.random() < SPECIAL_VISIT_CHANCE) {
+      dex = SPECIAL_POKEMON[Math.floor(Math.random() * SPECIAL_POKEMON.length)].dex;
+    }
+    record = { date: today, dex };
+    localStorage.setItem(SPECIAL_VISIT_KEY, JSON.stringify(record));
+  }
+  if (record.dex == null) return null;
+  return SPECIAL_POKEMON.find((p) => p.dex === record.dex) || null;
 }
 
 async function renderDexGrid() {
@@ -1587,7 +1721,7 @@ function renderParkFloor(actorData) {
 
   const actors = list.map((d, i) => {
     const img = document.createElement("img");
-    img.className = "park-actor";
+    img.className = "park-actor" + (d.special ? " special" : "");
     img.src = d.icon;
     img.alt = d.name || "";
     floor.appendChild(img);
@@ -1611,6 +1745,10 @@ function renderParkFloor(actorData) {
     };
     img.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (d.special) {
+        openSpecialRegister(d.special);
+        return;
+      }
       if (pausedActor === a) hideBubble();
       else showBubble(a);
     });
@@ -1663,6 +1801,8 @@ function renderParkFloor(actorData) {
         a.sized = true;
       }
       if (a.paused) {
+        // stack by ground position: lower on the floor (bigger y) sits in front
+        a.img.style.zIndex = Math.round(a.y);
         a.img.style.transform =
           `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) scaleX(${a.face})`;
         continue;
@@ -1699,6 +1839,9 @@ function renderParkFloor(actorData) {
       const maxY = Math.max(PAD + LIFT_MAX, H - a.h - PAD);
       a.x = Math.min(Math.max(a.x, PAD), maxX);
       a.y = Math.min(Math.max(a.y, PAD + LIFT_MAX), maxY);
+      // stack by ground position (ignoring the hop lift) so a pokemon farther
+      // up the box renders behind one lower down / in front of it
+      a.img.style.zIndex = Math.round(a.y);
       a.img.style.transform =
         `translate(${a.x.toFixed(1)}px, ${(a.y - lift).toFixed(1)}px) scaleX(${a.face})`;
     }
@@ -1766,6 +1909,16 @@ function renderParkMine() {
         task: typeof p.task === "string" && p.task ? p.task : null,
       });
     }
+  }
+  // A rare special visitor hops around with the rest when today's roll hits.
+  const visitor = getSpecialVisitor();
+  if (visitor) {
+    floorActors.push({
+      icon: dexIconUrl(visitor.dex, false),
+      nickname: "",
+      name: visitor.name,
+      special: visitor,
+    });
   }
   renderParkFloor(floorActors);
 }
