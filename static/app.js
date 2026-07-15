@@ -1034,7 +1034,55 @@ function getDexEntries() {
 
 let dexActiveTab = "all";
 
+// The "special" tab is a fixed set of mythical/legendary pokemon that only ever
+// visit the pokepark by chance. They stay silhouetted with a "???" label - the
+// whole point is the mystery - and tapping any of them opens the hint menu
+// below rather than a real dex entry.
+const SPECIAL_DEX_ENTRIES = [
+  482, // azelf
+  480, // uxie
+  481, // mesprit
+  489, // phione
+  490, // manaphy
+  494, // victini
+  492, // shaymin (land)
+  10006, // shaymin (sky)
+  647, // keldeo
+  802, // marshadow
+];
+
+function renderSpecialGrid() {
+  dexGridEl.innerHTML = "";
+  for (const dex of SPECIAL_DEX_ENTRIES) {
+    const cell = document.createElement("div");
+    cell.className = "dex-cell undiscovered special";
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.src = dexIconUrl(dex, false);
+    img.alt = "undiscovered";
+    const num = document.createElement("span");
+    num.className = "dex-num";
+    num.textContent = "???";
+    cell.append(img, num);
+    cell.addEventListener("click", openSpecialEntry);
+    dexGridEl.appendChild(cell);
+  }
+}
+
+function openSpecialEntry() {
+  const oldBlur = pokedexPanelEl.querySelector(".team-blur-bg");
+  if (oldBlur) oldBlur.remove();
+  pokedexContentEl.innerHTML =
+    `<h2 class="pokedex-title">???</h2>` +
+    `<p class="pokedex-desc">there's a small daily chance this pokemon will visit your pokepark. keep your eye out!</p>`;
+  pokedexOverlayEl.classList.remove("hidden");
+}
+
 async function renderDexGrid() {
+  if (dexActiveTab === "special") {
+    renderSpecialGrid();
+    return;
+  }
   const entries = await getDexEntries();
   const shiny = dexActiveTab === "shiny";
   const seen = dexDiscoveries[shiny ? "shiny" : "all"];
@@ -2378,6 +2426,7 @@ for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {
     dexActiveTab = tab.dataset.tab;
     document.querySelectorAll(".dex-tab").forEach((b) => b.classList.toggle("active", b === tab));
+    dexPageEl.classList.toggle("special-active", dexActiveTab === "special");
     renderDexGrid();
   });
 }
