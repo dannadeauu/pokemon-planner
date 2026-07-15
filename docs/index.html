@@ -74,10 +74,12 @@
       <button class="dex-tab" data-tab="shiny">shiny
         <svg class="shiny-star" viewBox="0 0 100 100" fill="currentColor"><path d="M34 30 Q37.84 58.16 66 62 Q37.84 65.84 34 94 Q30.16 65.84 2 62 Q30.16 58.16 34 30 Z"/><path d="M74 12 Q76.88 33.12 98 36 Q76.88 38.88 74 60 Q71.12 38.88 50 36 Q71.12 33.12 74 12 Z"/><path d="M28 1 Q29.32 10.68 39 12 Q29.32 13.32 28 23 Q26.68 13.32 17 12 Q26.68 10.68 28 1 Z"/></svg>
       </button>
+      <button class="dex-tab" data-tab="special">special</button>
     </div>
     <div class="dex-card">
       <div class="dex-grid" id="dex-grid"></div>
     </div>
+    <p class="dex-hint" id="dex-hint">tap each silhouette to find out where to find that pokemon!</p>
   </div>
 
   <div class="pokedex-overlay hidden" id="pokedex-overlay">
@@ -121,7 +123,10 @@
         </div>
         <div class="color-row">
           <label for="color-done">done!</label>
-          <input type="color" id="color-done" />
+          <div class="color-row-controls">
+            <button type="button" class="match-companion-btn" id="match-companion-done-btn">match companion</button>
+            <input type="color" id="color-done" />
+          </div>
         </div>
       </div>
 
@@ -239,6 +244,14 @@
       <h3 class="dev-note-title">remove friend?</h3>
       <button class="friends-btn" id="remove-friend-no" type="button">no</button>
       <button class="friends-btn friends-btn-secondary" id="remove-friend-yes" type="button">yes</button>
+    </div>
+  </div>
+
+  <div class="dev-note-overlay hidden" id="delete-task-overlay">
+    <div class="dev-note-box remove-friend-box">
+      <h3 class="dev-note-title">delete this task?</h3>
+      <button class="friends-btn" id="delete-task-no" type="button">no</button>
+      <button class="friends-btn friends-btn-secondary" id="delete-task-yes" type="button">yes</button>
     </div>
   </div>
 
