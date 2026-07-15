@@ -1495,12 +1495,19 @@ function getSpecialVisitor() {
 }
 
 async function renderDexGrid() {
-  if (dexActiveTab === "special") {
+  const tab = dexActiveTab;
+  // The hint belongs to the special tab only; keep it in sync with whatever
+  // we're actually rendering, no matter how the render was triggered.
+  dexPageEl.classList.toggle("special-active", tab === "special");
+  if (tab === "special") {
     renderSpecialGrid();
     return;
   }
   const entries = await getDexEntries();
-  const shiny = dexActiveTab === "shiny";
+  // A newer render (e.g. a fast tab switch) began while we awaited entries;
+  // bail so this stale render can't clobber the grid it left behind.
+  if (dexActiveTab !== tab) return;
+  const shiny = tab === "shiny";
   const seen = dexDiscoveries[shiny ? "shiny" : "all"];
   dexGridEl.innerHTML = "";
   for (const entry of entries) {
@@ -2861,7 +2868,6 @@ for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {
     dexActiveTab = tab.dataset.tab;
     document.querySelectorAll(".dex-tab").forEach((b) => b.classList.toggle("active", b === tab));
-    dexPageEl.classList.toggle("special-active", dexActiveTab === "special");
     renderDexGrid();
   });
 }
