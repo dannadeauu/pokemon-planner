@@ -1,4 +1,4 @@
--- Cross-device task sync for signed-in (Google) accounts.
+-- Cross-device sync for signed-in (Google) accounts: task list + pokedex.
 -- Run this once in the Supabase SQL editor (in addition to schema.sql and
 -- account.sql). Requires Google sign-in to already be configured (see
 -- account.sql for those steps).
@@ -62,3 +62,58 @@ revoke all on function push_tasks (jsonb) from public;
 revoke all on function get_tasks () from public;
 grant execute on function push_tasks (jsonb) to authenticated;
 grant execute on function get_tasks () to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Pokedex sync: discoveries (all + shiny) and registered "special" pokemon.
+-- Unlike tasks, pokedex progress only ever grows, so the client unions the two
+-- sides together instead of picking a winner - order and timing don't matter.
+-- ---------------------------------------------------------------------------
+
+create table if not exists dex_data (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table dex_data enable row level security;
+
+-- Upsert the signed-in account's pokedex progress (the client sends the merged
+-- superset, so this is a plain overwrite).
+create or replace function push_dex(p_data jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'not signed in';
+  end if;
+  if pg_column_size(p_data) > 200000 then
+    raise exception 'pokedex too large';
+  end if;
+  insert into dex_data (user_id, data, updated_at)
+  values (v_uid, p_data, now())
+  on conflict (user_id)
+  do update set data = excluded.data, updated_at = now();
+end;
+$$;
+
+-- Fetch the signed-in account's pokedex progress (null when none yet).
+create or replace function get_dex()
+returns json
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select data from dex_data where user_id = auth.uid();
+$$;
+
+revoke all on function push_dex (jsonb) from public;
+revoke all on function get_dex () from public;
+grant execute on function push_dex (jsonb) to authenticated;
+grant execute on function get_dex () to authenticated;

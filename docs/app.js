@@ -1356,7 +1356,10 @@ function registerDiscovery(pokemon) {
     dexDiscoveries.shiny[key] = true;
     changed = true;
   }
-  if (changed) saveDexDiscoveries();
+  if (changed) {
+    saveDexDiscoveries();
+    scheduleDexSync();
+  }
 }
 
 let dexEntriesPromise = null;
@@ -1400,10 +1403,15 @@ function loadSpecialRegistered() {
 
 const specialRegistered = loadSpecialRegistered();
 
+function saveSpecialRegistered() {
+  localStorage.setItem(SPECIAL_KEY, JSON.stringify(specialRegistered));
+}
+
 function registerSpecial(dex) {
   if (!specialRegistered[String(dex)]) {
     specialRegistered[String(dex)] = true;
-    localStorage.setItem(SPECIAL_KEY, JSON.stringify(specialRegistered));
+    saveSpecialRegistered();
+    scheduleDexSync();
   }
 }
 
@@ -2738,6 +2746,80 @@ async function pullTasks() {
   }
 }
 
+// ---- cross-device pokedex sync (signed-in accounts) ----
+// Pokedex progress (discoveries + registered specials) only ever grows, so both
+// sides are unioned together rather than one overwriting the other - no
+// conflicts, no data loss regardless of which device saw what first.
+let dexSyncTimer = null;
+
+function dexSyncPayload() {
+  return {
+    discoveries: { all: dexDiscoveries.all, shiny: dexDiscoveries.shiny },
+    special: specialRegistered,
+  };
+}
+
+function scheduleDexSync() {
+  if (!authSession || !supabaseConfigured()) return;
+  clearTimeout(dexSyncTimer);
+  dexSyncTimer = setTimeout(pushDex, 1500);
+}
+
+async function pushDex() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    await supabaseRpc("push_dex", { p_data: dexSyncPayload() }, authSession.access_token);
+  } catch (e) {
+    // offline or tasks.sql not run yet - the next discovery retries
+  }
+}
+
+// Union the account's progress into this device's. Reports whether local gained
+// anything (needs a re-render) and whether the cloud is missing anything we
+// have (needs a push so it converges to the union).
+function mergeDexFrom(remote) {
+  let localChanged = false;
+  let cloudMissing = false;
+  const union = (localObj, remoteObj) => {
+    remoteObj = remoteObj || {};
+    for (const k in remoteObj) {
+      if (remoteObj[k] && !localObj[k]) {
+        localObj[k] = true;
+        localChanged = true;
+      }
+    }
+    for (const k in localObj) {
+      if (localObj[k] && !remoteObj[k]) cloudMissing = true;
+    }
+  };
+  const d = (remote && remote.discoveries) || {};
+  union(dexDiscoveries.all, d.all);
+  union(dexDiscoveries.shiny, d.shiny);
+  union(specialRegistered, remote && remote.special);
+  return { localChanged, cloudMissing };
+}
+
+async function pullDex() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    const remote = await supabaseRpc("get_dex", {}, authSession.access_token);
+    const { localChanged, cloudMissing } = mergeDexFrom(remote);
+    if (localChanged) {
+      saveDexDiscoveries();
+      saveSpecialRegistered();
+      renderDexGrid();
+    }
+    // push our merged superset up whenever the cloud is missing anything we have
+    if (cloudMissing) scheduleDexSync();
+  } catch (e) {
+    // offline or tasks.sql not run yet
+  }
+}
+
 // Supabase sends OAuth tokens back in the URL hash after the Google redirect.
 async function handleAuthRedirect() {
   if (!location.hash) return;
@@ -2771,6 +2853,7 @@ async function handleAuthRedirect() {
   saveAuthSession();
   await syncTrainerWithAccount();
   await pullTasks();
+  await pullDex();
 }
 
 async function ensureFreshAuth() {
@@ -2943,15 +3026,20 @@ if (supabaseConfigured()) {
   (async () => {
     await handleAuthRedirect();
     await ensureFreshAuth();
-    // Already signed in from a previous visit: pull this account's latest tasks.
+    // Already signed in from a previous visit: pull this account's latest
+    // tasks and pokedex progress.
     await pullTasks();
+    await pullDex();
   })();
 }
 
 // Coming back to the app (switching devices, reopening the tab) re-pulls so the
-// list reflects edits made on another device.
+// list and pokedex reflect changes made on another device.
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) pullTasks();
+  if (!document.hidden) {
+    pullTasks();
+    pullDex();
+  }
 });
 
 for (const tab of document.querySelectorAll(".dex-tab")) {
