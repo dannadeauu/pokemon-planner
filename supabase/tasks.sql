@@ -117,3 +117,59 @@ revoke all on function push_dex (jsonb) from public;
 revoke all on function get_dex () from public;
 grant execute on function push_dex (jsonb) to authenticated;
 grant execute on function get_dex () to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Profile sync: companion pokemon + pokepark message. Single-value settings,
+-- so the client resolves them last-write-wins by updated_at, like tasks.
+-- ---------------------------------------------------------------------------
+
+create table if not exists prefs_data (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table prefs_data enable row level security;
+
+create or replace function push_prefs(p_data jsonb)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid;
+  v_ts timestamptz;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'not signed in';
+  end if;
+  if pg_column_size(p_data) > 20000 then
+    raise exception 'prefs too large';
+  end if;
+  insert into prefs_data (user_id, data, updated_at)
+  values (v_uid, p_data, now())
+  on conflict (user_id)
+  do update set data = excluded.data, updated_at = now()
+  returning updated_at into v_ts;
+  return v_ts;
+end;
+$$;
+
+create or replace function get_prefs()
+returns json
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select json_build_object('data', data, 'updated_at', updated_at)
+  from prefs_data
+  where user_id = auth.uid();
+$$;
+
+revoke all on function push_prefs (jsonb) from public;
+revoke all on function get_prefs () from public;
+grant execute on function push_prefs (jsonb) to authenticated;
+grant execute on function get_prefs () to authenticated;

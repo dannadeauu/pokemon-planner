@@ -667,6 +667,7 @@ function initSettings() {
     saveSettings(settings);
     applyCompanion();
     applyMatchCompanion();
+    touchPrefs();
   });
 
   window.addEventListener("resize", sizeCompanionImage);
@@ -1462,6 +1463,8 @@ function openSpecialEntry() {
 async function openSpecialRegister(entry) {
   registerSpecial(entry.dex);
   if (dexActiveTab === "special") renderSpecialGrid();
+  // Rebuild the park floor so the just-registered visitor stops hopping around.
+  renderParkMine();
 
   const oldBlur = pokedexPanelEl.querySelector(".team-blur-bg");
   if (oldBlur) oldBlur.remove();
@@ -1499,14 +1502,20 @@ function getSpecialVisitor() {
   }
   const today = specialTodayStamp();
   if (!record || record.date !== today) {
+    // Only roll among pokemon not already registered, so a mythical the player
+    // has caught never comes back to the park.
+    const pool = SPECIAL_POKEMON.filter((p) => !specialRegistered[String(p.dex)]);
     let dex = null;
-    if (Math.random() < SPECIAL_VISIT_CHANCE) {
-      dex = SPECIAL_POKEMON[Math.floor(Math.random() * SPECIAL_POKEMON.length)].dex;
+    if (pool.length && Math.random() < SPECIAL_VISIT_CHANCE) {
+      dex = pool[Math.floor(Math.random() * pool.length)].dex;
     }
     record = { date: today, dex };
     localStorage.setItem(SPECIAL_VISIT_KEY, JSON.stringify(record));
   }
   if (record.dex == null) return null;
+  // Today's visitor may have since been registered (tapped) - or registered on
+  // another device and synced in; either way it shouldn't appear anymore.
+  if (specialRegistered[String(record.dex)]) return null;
   return SPECIAL_POKEMON.find((p) => p.dex === record.dex) || null;
 }
 
@@ -1851,6 +1860,17 @@ function saveRequests() {
 const PARK_MSG_KEY = "todo-app-park-message";
 let parkMessage = localStorage.getItem(PARK_MSG_KEY) || "";
 
+// Last time this device changed a synced profile pref (companion / park
+// message), for last-write-wins resolution across devices.
+const PREFS_TS_KEY = "todo-app-prefs-ts";
+let prefsUpdatedAt = localStorage.getItem(PREFS_TS_KEY) || null;
+
+function touchPrefs() {
+  prefsUpdatedAt = new Date().toISOString();
+  localStorage.setItem(PREFS_TS_KEY, prefsUpdatedAt);
+  schedulePrefsSync();
+}
+
 // Whether this device shares its task text with friends. Default on; when off,
 // task strings are left out of the pushed snapshot entirely.
 const HIDE_TASKS_KEY = "todo-app-hide-tasks";
@@ -2188,6 +2208,7 @@ function renderParkMine() {
     localStorage.setItem(PARK_MSG_KEY, parkMessage);
     autosize();
     schedulePushTeam();
+    touchPrefs();
   });
   parkMineEl.appendChild(msg);
   autosize();
@@ -2820,6 +2841,70 @@ async function pullDex() {
   }
 }
 
+// ---- cross-device profile sync: companion pokemon + pokepark message ----
+// Single-value settings, resolved last-write-wins by timestamp like tasks.
+let prefsSyncTimer = null;
+
+function prefsSyncPayload() {
+  return { companion: settings.companion, parkMessage };
+}
+
+function schedulePrefsSync() {
+  if (!authSession || !supabaseConfigured()) return;
+  clearTimeout(prefsSyncTimer);
+  prefsSyncTimer = setTimeout(pushPrefs, 1500);
+}
+
+async function pushPrefs() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    await supabaseRpc("push_prefs", { p_data: prefsSyncPayload() }, authSession.access_token);
+  } catch (e) {
+    // offline or tasks.sql not run yet - the next change retries
+  }
+}
+
+async function pullPrefs() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    const remote = await supabaseRpc("get_prefs", {}, authSession.access_token);
+    if (!remote || !remote.data) {
+      if (prefsUpdatedAt) schedulePrefsSync(); // seed the account from this device
+      return;
+    }
+    const remoteMs = remote.updated_at ? Date.parse(remote.updated_at) : 0;
+    const localMs = prefsUpdatedAt ? Date.parse(prefsUpdatedAt) : 0;
+    if (remoteMs >= localMs) {
+      // adopt the account's newer companion / message
+      const data = remote.data;
+      const companion = typeof data.companion === "string" ? data.companion : settings.companion;
+      const message = typeof data.parkMessage === "string" ? data.parkMessage : parkMessage;
+      const changed = companion !== settings.companion || message !== parkMessage;
+      settings.companion = companion;
+      saveSettings(settings);
+      parkMessage = message;
+      localStorage.setItem(PARK_MSG_KEY, parkMessage);
+      prefsUpdatedAt = remote.updated_at;
+      localStorage.setItem(PREFS_TS_KEY, prefsUpdatedAt);
+      if (changed) {
+        populateCompanionSelect();
+        applyCompanion();
+        applyMatchCompanion();
+        const msgInput = document.querySelector(".park-msg-input");
+        if (msgInput) msgInput.value = parkMessage;
+      }
+    } else {
+      schedulePrefsSync(); // this device is newer: push it up
+    }
+  } catch (e) {
+    // offline or tasks.sql not run yet
+  }
+}
+
 // Supabase sends OAuth tokens back in the URL hash after the Google redirect.
 async function handleAuthRedirect() {
   if (!location.hash) return;
@@ -2854,6 +2939,7 @@ async function handleAuthRedirect() {
   await syncTrainerWithAccount();
   await pullTasks();
   await pullDex();
+  await pullPrefs();
 }
 
 async function ensureFreshAuth() {
@@ -3027,18 +3113,20 @@ if (supabaseConfigured()) {
     await handleAuthRedirect();
     await ensureFreshAuth();
     // Already signed in from a previous visit: pull this account's latest
-    // tasks and pokedex progress.
+    // tasks, pokedex progress, and profile (companion + park message).
     await pullTasks();
     await pullDex();
+    await pullPrefs();
   })();
 }
 
 // Coming back to the app (switching devices, reopening the tab) re-pulls so the
-// list and pokedex reflect changes made on another device.
+// list, pokedex, and profile reflect changes made on another device.
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     pullTasks();
     pullDex();
+    pullPrefs();
   }
 });
 
