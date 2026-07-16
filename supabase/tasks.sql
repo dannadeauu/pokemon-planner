@@ -119,6 +119,63 @@ grant execute on function push_dex (jsonb) to authenticated;
 grant execute on function get_dex () to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Desktop UI prefs sync: the editable banner image, title, and Spotify embed
+-- link shown on the desktop dashboard. Last-write-wins by updated_at, handled
+-- on the client. (The banner is a downscaled data URL, hence the larger cap.)
+-- ---------------------------------------------------------------------------
+
+create table if not exists ui_prefs (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table ui_prefs enable row level security;
+
+create or replace function push_ui(p_data jsonb)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid;
+  v_ts timestamptz;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'not signed in';
+  end if;
+  if pg_column_size(p_data) > 3000000 then
+    raise exception 'ui prefs too large';
+  end if;
+  insert into ui_prefs (user_id, data, updated_at)
+  values (v_uid, p_data, now())
+  on conflict (user_id)
+  do update set data = excluded.data, updated_at = now()
+  returning updated_at into v_ts;
+  return v_ts;
+end;
+$$;
+
+create or replace function get_ui()
+returns json
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select json_build_object('data', data, 'updated_at', updated_at)
+  from ui_prefs
+  where user_id = auth.uid();
+$$;
+
+revoke all on function push_ui (jsonb) from public;
+revoke all on function get_ui () from public;
+grant execute on function push_ui (jsonb) to authenticated;
+grant execute on function get_ui () to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Profile sync: companion pokemon + pokepark message. Single-value settings,
 -- so the client resolves them last-write-wins by updated_at, like tasks.
 -- ---------------------------------------------------------------------------

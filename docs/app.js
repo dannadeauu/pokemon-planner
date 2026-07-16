@@ -1524,6 +1524,8 @@ async function renderDexGrid() {
   // The hint belongs to the special tab only; keep it in sync with whatever
   // we're actually rendering, no matter how the render was triggered.
   dexPageEl.classList.toggle("special-active", tab === "special");
+  const dtRoot = document.getElementById("dt-root");
+  if (dtRoot) dtRoot.classList.toggle("special-active", tab === "special");
   if (tab === "special") {
     renderSpecialGrid();
     return;
@@ -2940,6 +2942,7 @@ async function handleAuthRedirect() {
   await pullTasks();
   await pullDex();
   await pullPrefs();
+  await pullUi();
 }
 
 async function ensureFreshAuth() {
@@ -3117,6 +3120,7 @@ if (supabaseConfigured()) {
     await pullTasks();
     await pullDex();
     await pullPrefs();
+    await pullUi();
   })();
 }
 
@@ -3127,6 +3131,7 @@ document.addEventListener("visibilitychange", () => {
     pullTasks();
     pullDex();
     pullPrefs();
+    pullUi();
   }
 });
 
@@ -3153,6 +3158,240 @@ listScrollEl.addEventListener("scroll", () => {
 renderDate();
 initSettings();
 refresh();
+
+// ==========================================================================
+// Desktop dashboard (>=1024px). Relocates the live team / task / poképark /
+// pokédex nodes into the desktop scaffold and drives the desktop-only widgets
+// (editable banner + title, clock, spotify embed). Mobile is never touched:
+// none of this runs, and no styles apply, below the breakpoint.
+// ==========================================================================
+const DESKTOP_MQ = window.matchMedia("(min-width: 1024px)");
+
+const UI_PREFS_KEY = "todo-app-ui-prefs";
+function loadUiPrefs() {
+  try {
+    const s = JSON.parse(localStorage.getItem(UI_PREFS_KEY));
+    if (s && typeof s === "object") return { banner: "", title: "pokeplanner", spotify: "", ...s };
+  } catch (e) {
+    // fall through to defaults
+  }
+  return { banner: "", title: "pokeplanner", spotify: "" };
+}
+let uiPrefs = loadUiPrefs();
+function saveUiPrefs() {
+  localStorage.setItem(UI_PREFS_KEY, JSON.stringify(uiPrefs));
+}
+
+// ---- ui prefs sync (banner/title/spotify), last-write-wins by timestamp ----
+let uiSyncTimer = null;
+let lastSyncedUi = null;
+function uiSyncBody() {
+  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify });
+}
+function touchUiPrefs() {
+  uiPrefs.updatedAt = new Date().toISOString();
+  saveUiPrefs();
+  if (!authSession || !supabaseConfigured()) return;
+  clearTimeout(uiSyncTimer);
+  uiSyncTimer = setTimeout(pushUi, 1500);
+}
+async function pushUi() {
+  if (!authSession || !supabaseConfigured()) return;
+  const body = uiSyncBody();
+  if (body === lastSyncedUi) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    await supabaseRpc(
+      "push_ui",
+      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, updatedAt: uiPrefs.updatedAt } },
+      authSession.access_token
+    );
+    lastSyncedUi = body;
+  } catch (e) {
+    // offline or tasks.sql not run yet - retries on next change
+  }
+}
+async function pullUi() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    const remote = await supabaseRpc("get_ui", {}, authSession.access_token);
+    if (!remote || !remote.data) {
+      if (uiPrefs.updatedAt) { clearTimeout(uiSyncTimer); uiSyncTimer = setTimeout(pushUi, 1500); }
+      return;
+    }
+    const remoteMs = remote.updated_at ? Date.parse(remote.updated_at) : 0;
+    const localMs = uiPrefs.updatedAt ? Date.parse(uiPrefs.updatedAt) : 0;
+    if (remoteMs >= localMs) {
+      const d = remote.data;
+      if (typeof d.banner === "string") uiPrefs.banner = d.banner;
+      if (typeof d.title === "string") uiPrefs.title = d.title;
+      if (typeof d.spotify === "string") uiPrefs.spotify = d.spotify;
+      uiPrefs.updatedAt = remote.updated_at;
+      saveUiPrefs();
+      lastSyncedUi = uiSyncBody();
+      if (DESKTOP_MQ.matches) applyUiPrefs();
+    } else {
+      clearTimeout(uiSyncTimer);
+      uiSyncTimer = setTimeout(pushUi, 1500);
+    }
+  } catch (e) {
+    // offline or tasks.sql not run yet
+  }
+}
+
+// A spotify share link (or spotify: URI) -> its /embed/ iframe URL.
+function spotifyEmbedUrl(link) {
+  if (!link) return "";
+  let m = link.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|track|artist|show|episode)\/([A-Za-z0-9]+)/);
+  if (m) return `https://open.spotify.com/embed/${m[1]}/${m[2]}`;
+  m = link.match(/spotify:(playlist|album|track|artist|show|episode):([A-Za-z0-9]+)/);
+  if (m) return `https://open.spotify.com/embed/${m[1]}/${m[2]}`;
+  return "";
+}
+function renderSpotifyEmbed() {
+  const frame = document.getElementById("dt-embed-frame");
+  if (!frame) return;
+  const embed = spotifyEmbedUrl(uiPrefs.spotify);
+  frame.innerHTML = embed
+    ? `<iframe src="${embed}" height="232" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`
+    : `<div class="dt-embed-empty">add a spotify playlist link</div>`;
+}
+
+function applyUiPrefs() {
+  const banner = document.getElementById("dt-banner");
+  if (banner) banner.style.backgroundImage = uiPrefs.banner ? `url("${uiPrefs.banner}")` : "";
+  const title = document.getElementById("dt-title");
+  if (title && document.activeElement !== title) title.textContent = uiPrefs.title || "pokeplanner";
+  renderSpotifyEmbed();
+}
+
+// Downscale a picked banner so its data URL stays small enough to sync.
+function downscaleImage(dataUrl, maxW, quality) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      try {
+        resolve(c.toDataURL("image/jpeg", quality));
+      } catch (e) {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function startDesktopClock() {
+  const hEl = document.getElementById("dt-clock-h");
+  const mEl = document.getElementById("dt-clock-m");
+  const apEl = document.getElementById("dt-clock-ampm");
+  if (!hEl) return;
+  const tick = () => {
+    const d = new Date();
+    let hr = d.getHours();
+    const pm = hr >= 12;
+    hr = hr % 12;
+    if (hr === 0) hr = 12;
+    hEl.textContent = hr;
+    mEl.textContent = String(d.getMinutes()).padStart(2, "0");
+    apEl.textContent = pm ? "PM" : "AM";
+  };
+  tick();
+  setInterval(tick, 15000);
+}
+
+let desktopBuilt = false;
+function buildDesktop() {
+  if (desktopBuilt) return;
+  desktopBuilt = true;
+
+  const move = (node, slot) => {
+    if (node && slot) slot.appendChild(node);
+  };
+  move(document.getElementById("team-grid"), document.getElementById("dt-team-slot"));
+  const tasksSlot = document.getElementById("dt-tasks-slot");
+  move(document.getElementById("add-form"), tasksSlot);
+  move(document.getElementById("todo-list"), tasksSlot);
+  move(document.getElementById("park-mine"), document.getElementById("dt-park-slot"));
+  const dexSlot = document.getElementById("dt-dex-slot");
+  move(document.querySelector(".dex-tabs"), dexSlot);
+  move(document.querySelector(".dex-card"), dexSlot);
+  move(document.getElementById("dex-hint"), dexSlot);
+
+  // desktop nav buttons reuse the exact mobile overlay behaviors
+  document.getElementById("dt-settings-btn").addEventListener("click", () => settingsFabEl.click());
+  document.getElementById("dt-friends-btn").addEventListener("click", () => friendsFabEl.click());
+  document.getElementById("dt-account-btn").addEventListener("click", () => {
+    friendsFabEl.click();
+    accountBtnEl.click();
+  });
+
+  // editable banner
+  const bannerInput = document.getElementById("dt-banner-input");
+  document.getElementById("dt-banner-edit").addEventListener("click", () => bannerInput.click());
+  bannerInput.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () =>
+      downscaleImage(reader.result, 1600, 0.82).then((url) => {
+        uiPrefs.banner = url;
+        applyUiPrefs();
+        touchUiPrefs();
+      });
+    reader.readAsDataURL(file);
+  });
+
+  // editable title
+  const titleEl = document.getElementById("dt-title");
+  titleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      titleEl.blur();
+    }
+  });
+  titleEl.addEventListener("blur", () => {
+    const t = (titleEl.textContent || "").trim() || "pokeplanner";
+    titleEl.textContent = t;
+    if (t !== uiPrefs.title) {
+      uiPrefs.title = t;
+      touchUiPrefs();
+    }
+  });
+
+  // editable spotify embed
+  document.getElementById("dt-embed-edit").addEventListener("click", () => {
+    const link = window.prompt("paste a spotify playlist / album / track link:", uiPrefs.spotify || "");
+    if (link === null) return;
+    uiPrefs.spotify = link.trim();
+    renderSpotifyEmbed();
+    touchUiPrefs();
+  });
+
+  applyUiPrefs();
+  startDesktopClock();
+
+  // populate the relocated widgets
+  refresh();
+  refreshPark();
+  renderDexGrid();
+}
+
+if (DESKTOP_MQ.matches) buildDesktop();
+// Crossing the breakpoint swaps between two very different layouts; a reload is
+// the clean way to rebuild rather than shuffle nodes back and forth live.
+DESKTOP_MQ.addEventListener("change", () => location.reload());
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js");

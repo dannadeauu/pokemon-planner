@@ -17,6 +17,63 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <!-- Desktop dashboard. Hidden below 1024px; on desktop it is shown and the
+       live team / task / poképark / pokédex nodes are relocated into its slots
+       by JS, so all existing rendering keeps working. Mobile is untouched. -->
+  <div class="dt-root" id="dt-root">
+    <div class="dt-banner" id="dt-banner">
+      <button class="dt-banner-edit" id="dt-banner-edit" type="button">change banner</button>
+      <input type="file" id="dt-banner-input" accept="image/*" hidden />
+    </div>
+
+    <h1 class="dt-title" id="dt-title" contenteditable="true" spellcheck="false">pokeplanner</h1>
+
+    <div class="dt-dashboard">
+      <div class="dt-team-col" id="dt-team-slot"></div>
+
+      <div class="dt-tasks-col">
+        <h2 class="dt-h2">today's team</h2>
+        <div class="dt-tasks" id="dt-tasks-slot"></div>
+      </div>
+
+      <div class="dt-mid-col">
+        <div class="dt-clock">
+          <div class="dt-clock-box"><span class="dt-ampm" id="dt-clock-ampm">AM</span><span id="dt-clock-h">--</span></div>
+          <div class="dt-clock-box"><span id="dt-clock-m">--</span></div>
+        </div>
+        <div class="dt-nav-btns">
+          <button class="dt-nav-btn" id="dt-account-btn" type="button">account</button>
+          <button class="dt-nav-btn" id="dt-friends-btn" type="button">friends</button>
+          <button class="dt-nav-btn" id="dt-settings-btn" type="button">settings</button>
+        </div>
+        <h2 class="dt-h2">habit tracker</h2>
+        <div class="dt-box dt-habit-box"></div>
+      </div>
+
+      <div class="dt-right-col">
+        <div class="dt-embed" id="dt-embed">
+          <div class="dt-embed-frame" id="dt-embed-frame"></div>
+          <button class="dt-embed-edit" id="dt-embed-edit" type="button">set spotify link</button>
+        </div>
+        <h2 class="dt-h2">pokepark</h2>
+        <div class="dt-box dt-park-box" id="dt-park-slot"></div>
+      </div>
+    </div>
+
+    <div class="dt-section">
+      <h2 class="dt-h2">calendar</h2>
+      <div class="dt-cal-row">
+        <div class="dt-box dt-calendar"></div>
+        <div class="dt-box dt-cal-tasks"></div>
+      </div>
+    </div>
+
+    <div class="dt-section dt-dex-section">
+      <h2 class="dt-h2">pokedex</h2>
+      <div id="dt-dex-slot"></div>
+    </div>
+  </div>
+
   <div class="app page">
     <div class="app-header">
       <div class="team-card">
