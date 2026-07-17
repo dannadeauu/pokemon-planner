@@ -2046,6 +2046,10 @@ function renderParkFloor(actorData) {
 
   floor.addEventListener("click", () => hideBubble());
 
+  // On hover-capable pointers (desktop) the bubble appears on hover; touch
+  // devices keep the tap behavior, so mobile is unchanged.
+  const hoverCapable = window.matchMedia("(hover: hover)").matches;
+
   const actors = list.map((d, i) => {
     const img = document.createElement("img");
     img.className = "park-actor" + (d.special ? " special" : "");
@@ -2079,6 +2083,13 @@ function renderParkFloor(actorData) {
       if (pausedActor === a) hideBubble();
       else showBubble(a);
     });
+    if (hoverCapable && !d.special) {
+      // freeze + show the bubble while hovered, resume on leave
+      img.addEventListener("mouseenter", () => showBubble(a));
+      img.addEventListener("mouseleave", () => {
+        if (pausedActor === a) hideBubble();
+      });
+    }
     return a;
   });
 
@@ -3256,7 +3267,7 @@ function renderSpotifyEmbed() {
   if (!frame) return;
   const embed = spotifyEmbedUrl(uiPrefs.spotify);
   frame.innerHTML = embed
-    ? `<iframe src="${embed}" height="232" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`
+    ? `<iframe src="${embed}" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`
     : `<div class="dt-embed-empty">add a spotify playlist link</div>`;
 }
 
