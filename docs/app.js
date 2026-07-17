@@ -734,6 +734,9 @@ async function fetchTodos() {
   applyCompanion();
   applyMatchCompanion();
   maybeTriggerShinyFx();
+  // Desktop only (flag set in buildDesktop): re-append the 48h calendar items
+  // the render above just cleared. No-op on mobile.
+  if (window.__desktopReady) renderCalTeamExtras();
 }
 
 async function fetchStats() {
@@ -2954,6 +2957,7 @@ async function handleAuthRedirect() {
   await pullDex();
   await pullPrefs();
   await pullUi();
+  await pullCal();
 }
 
 async function ensureFreshAuth() {
@@ -3132,6 +3136,7 @@ if (supabaseConfigured()) {
     await pullDex();
     await pullPrefs();
     await pullUi();
+    await pullCal();
   })();
 }
 
@@ -3143,6 +3148,7 @@ document.addEventListener("visibilitychange", () => {
     pullDex();
     pullPrefs();
     pullUi();
+    pullCal();
   }
 });
 
@@ -3323,13 +3329,15 @@ function startDesktopClock() {
 
 // ==========================================================================
 // Desktop calendar: assignments placed on their due date, colored by class.
-// Items live only on the calendar (they do NOT create team pokemon). Stored
-// locally; desktop-only, so mobile is untouched.
+// Each item generates a pokemon; items due within 48h also show in today's
+// team. Synced across the account. Desktop-only, so mobile is untouched.
 // ==========================================================================
 const CAL_ITEMS_KEY = "todo-app-cal-items";
 const CAL_CLASSES_KEY = "todo-app-cal-classes";
+const CAL_TS_KEY = "todo-app-cal-ts";
 const CAL_NEUTRAL = "#8a8b91"; // classless items show basic gray
 const CAL_COMPLETIONS = ["not started", "in progress", "done!"];
+const CAL_SOON_MS = 48 * 60 * 60 * 1000; // "within 48 hours"
 
 function loadCalArray(key) {
   try {
@@ -3342,6 +3350,7 @@ function loadCalArray(key) {
 }
 let calItems = loadCalArray(CAL_ITEMS_KEY);
 let calClasses = loadCalArray(CAL_CLASSES_KEY);
+let calUpdatedAt = localStorage.getItem(CAL_TS_KEY) || "";
 let calNextId = calItems.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
 let calClassNextId = calClasses.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
 
@@ -3351,12 +3360,31 @@ function saveCalItems() {
 function saveCalClasses() {
   localStorage.setItem(CAL_CLASSES_KEY, JSON.stringify(calClasses));
 }
+// A user edit: re-render the desktop views, stamp, and sync to the account.
+function calTouch() {
+  calUpdatedAt = new Date().toISOString();
+  localStorage.setItem(CAL_TS_KEY, calUpdatedAt);
+  renderDesktopCalendar();
+  renderCalTasks();
+  renderCalTeamExtras();
+  scheduleCalSync();
+}
 function calClassById(id) {
   return calClasses.find((c) => c.id === id) || null;
 }
 function calClassColor(id) {
   const c = calClassById(id);
   return c ? c.color : CAL_NEUTRAL;
+}
+function calHexToRgb(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return { r: 138, g: 139, b: 145 };
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+// The class color at the given opacity (over whatever's behind it).
+function calRgba(clsId, alpha) {
+  const { r, g, b } = calHexToRgb(calClassColor(clsId));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 function calEsc(s) {
   const d = document.createElement("div");
@@ -3365,6 +3393,87 @@ function calEsc(s) {
 }
 function calDateStr(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+// The pokemon an item shows - it evolves with the item's completion, just like
+// a team task (not started -> base, in progress -> middle, done! -> final).
+function calItemPokemon(it) {
+  return pokemonFor({
+    status: it.completion,
+    pokemon_family: it.pokemon_family,
+    is_shiny: it.is_shiny,
+    is_mega: 0,
+    mega_variant: 0,
+  });
+}
+function calItemDueSoon(it) {
+  const dueMs = new Date(it.due + "T23:59:59").getTime();
+  const now = Date.now();
+  return dueMs >= now && dueMs - now <= CAL_SOON_MS;
+}
+
+// ---- cross-device calendar sync (items + classes), last-write-wins ----
+let calSyncTimer = null;
+let lastSyncedCal = null;
+function calSyncPayload() {
+  return { items: calItems, classes: calClasses };
+}
+function scheduleCalSync() {
+  if (!authSession || !supabaseConfigured()) return;
+  clearTimeout(calSyncTimer);
+  calSyncTimer = setTimeout(pushCal, 1500);
+}
+async function pushCal() {
+  if (!authSession || !supabaseConfigured()) return;
+  const body = JSON.stringify(calSyncPayload());
+  if (body === lastSyncedCal) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    await supabaseRpc(
+      "push_cal",
+      { p_data: { items: calItems, classes: calClasses, updatedAt: calUpdatedAt } },
+      authSession.access_token
+    );
+    lastSyncedCal = body;
+  } catch (e) {
+    // offline or tasks.sql not run yet - retries on next change
+  }
+}
+async function pullCal() {
+  if (!authSession || !supabaseConfigured()) return;
+  try {
+    await ensureFreshAuth();
+    if (!authSession) return;
+    const remote = await supabaseRpc("get_cal", {}, authSession.access_token);
+    if (!remote || !remote.data) {
+      if (calItems.length || calClasses.length) { clearTimeout(calSyncTimer); calSyncTimer = setTimeout(pushCal, 1500); }
+      return;
+    }
+    const remoteMs = remote.updated_at ? Date.parse(remote.updated_at) : 0;
+    const localMs = calUpdatedAt ? Date.parse(calUpdatedAt) : 0;
+    if (remoteMs >= localMs) {
+      const d = remote.data;
+      calItems = Array.isArray(d.items) ? d.items : [];
+      calClasses = Array.isArray(d.classes) ? d.classes : [];
+      calNextId = calItems.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
+      calClassNextId = calClasses.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
+      calUpdatedAt = remote.updated_at;
+      saveCalItems();
+      saveCalClasses();
+      localStorage.setItem(CAL_TS_KEY, calUpdatedAt);
+      lastSyncedCal = JSON.stringify(calSyncPayload());
+      if (window.__desktopReady) {
+        renderDesktopCalendar();
+        renderCalTasks();
+        renderCalTeamExtras();
+      }
+    } else {
+      clearTimeout(calSyncTimer);
+      calSyncTimer = setTimeout(pushCal, 1500);
+    }
+  } catch (e) {
+    // offline or tasks.sql not run yet
+  }
 }
 
 // A month grid; each day is a cell that holds its due-that-day items as colored
@@ -3388,8 +3497,9 @@ function renderDesktopCalendar() {
     const chips = calItems
       .filter((it) => it.due === dateStr)
       .map(
+        // 50% opacity of the class color, over the calendar cell
         (it) =>
-          `<div class="dt-cal-chip${it.completion === "done!" ? " done" : ""}" data-id="${it.id}" style="background:${calClassColor(it.cls)}">${calEsc(it.name)}</div>`
+          `<div class="dt-cal-chip${it.completion === "done!" ? " done" : ""}" data-id="${it.id}" style="background:${calRgba(it.cls, 0.5)}">${calEsc(it.name)}</div>`
       )
       .join("");
     cells +=
@@ -3446,8 +3556,7 @@ function renderCalTasks() {
       e.stopPropagation();
       calItems = calItems.filter((it) => it.id !== Number(btn.dataset.id));
       saveCalItems();
-      renderDesktopCalendar();
-      renderCalTasks();
+      calTouch();
     });
   });
 }
@@ -3568,11 +3677,20 @@ function saveCalPopup() {
       it.notes = notes;
     }
   } else {
-    calItems.push({ id: calNextId++, name, cls, completion, notes, due: calPopupDate });
+    // each new assignment generates its own pokemon (family + shiny roll)
+    calItems.push({
+      id: calNextId++,
+      name,
+      cls,
+      completion,
+      notes,
+      due: calPopupDate,
+      pokemon_family: Math.floor(Math.random() * POKEMON_FAMILIES.length),
+      is_shiny: Math.random() < SHINY_CHANCE ? 1 : 0,
+    });
   }
   saveCalItems();
-  renderDesktopCalendar();
-  renderCalTasks();
+  calTouch();
   closeCalPopup();
 }
 
@@ -3580,8 +3698,7 @@ function deleteCalPopup() {
   if (calPopupItemId != null) {
     calItems = calItems.filter((x) => x.id !== calPopupItemId);
     saveCalItems();
-    renderDesktopCalendar();
-    renderCalTasks();
+    calTouch();
   }
   closeCalPopup();
 }
@@ -3614,6 +3731,7 @@ function buildClassEditor() {
   classEditorEl.querySelector(".dt-class-add").addEventListener("click", () => {
     calClasses.push({ id: calClassNextId++, name: "new class", color: randomClassColor() });
     saveCalClasses();
+    calTouch();
     renderClassRows();
   });
   classEditorEl.querySelector(".dt-class-done").addEventListener("click", closeClassEditor);
@@ -3638,15 +3756,14 @@ function renderClassRows() {
     colorIn.addEventListener("input", () => {
       c.color = colorIn.value;
       saveCalClasses();
-      renderDesktopCalendar();
-      renderCalTasks();
+      calTouch();
     });
     nameIn.addEventListener("input", () => {
       c.name = nameIn.value;
       saveCalClasses();
+      calTouch();
     });
     nameIn.addEventListener("change", () => {
-      renderCalTasks();
       refreshClassSelectIfOpen();
     });
     delBtn.addEventListener("click", () => {
@@ -3656,9 +3773,8 @@ function renderClassRows() {
       });
       saveCalClasses();
       saveCalItems();
+      calTouch();
       renderClassRows();
-      renderDesktopCalendar();
-      renderCalTasks();
       refreshClassSelectIfOpen();
     });
     wrap.appendChild(row);
@@ -3670,6 +3786,7 @@ function openClassEditor(addNew) {
   if (addNew) {
     calClasses.push({ id: calClassNextId++, name: "new class", color: randomClassColor() });
     saveCalClasses();
+    calTouch();
   }
   renderClassRows();
   classEditorEl.classList.remove("hidden");
@@ -3683,6 +3800,57 @@ function closeClassEditor() {
 function refreshClassSelectIfOpen() {
   if (calPopupEl && !calPopupEl.classList.contains("hidden")) {
     renderClassSelect(calPopupEl.querySelector(".dt-pop-class"), calPopupSelectedClass);
+  }
+}
+
+// Assignments due within 48h join today's team: a row in the list (tinted with
+// the class color at 15% over the standard gray) plus their pokemon in the team
+// column. Desktop-only; re-run after every task render so it survives refreshes.
+function renderCalTeamExtras() {
+  const list = document.getElementById("todo-list");
+  if (!list) return;
+  list.querySelectorAll(".dt-cal-team-item").forEach((e) => e.remove());
+  const teamGrid = document.getElementById("team-grid");
+  if (teamGrid) teamGrid.querySelectorAll(".dt-cal-team-slot").forEach((e) => e.remove());
+
+  const soon = calItems.filter(calItemDueSoon);
+  if (soon.length) {
+    const empty = list.querySelector(".empty-state");
+    if (empty) empty.remove();
+  }
+  for (const it of soon) {
+    const poke = calItemPokemon(it);
+
+    const li = document.createElement("li");
+    li.className =
+      "todo-item dt-cal-team-item" + (it.completion === "done!" ? " status-done" : " status-pending");
+    if (it.cls) {
+      li.style.backgroundImage = `linear-gradient(0deg, ${calRgba(it.cls, 0.15)}, ${calRgba(it.cls, 0.15)})`;
+    }
+    const text = document.createElement("span");
+    text.className = "text";
+    text.textContent = it.name;
+    const prog = document.createElement("span");
+    prog.className = "dt-cal-team-prog";
+    prog.dataset.c = it.completion;
+    prog.textContent = it.completion;
+    const img = document.createElement("img");
+    img.className = "sprite";
+    img.src = poke.icon;
+    img.alt = poke.name;
+    li.append(text, prog, img);
+    li.addEventListener("click", () => openCalPopup(it.due, it, li));
+    list.appendChild(li);
+
+    if (teamGrid) {
+      const slot = document.createElement("div");
+      slot.className = "team-slot dt-cal-team-slot";
+      const simg = document.createElement("img");
+      simg.src = poke.sprite;
+      simg.alt = poke.name;
+      slot.appendChild(simg);
+      teamGrid.appendChild(slot);
+    }
   }
 }
 
@@ -3755,6 +3923,7 @@ function buildDesktop() {
     touchUiPrefs();
   });
 
+  window.__desktopReady = true; // lets fetchTodos re-append the 48h calendar items
   applyUiPrefs();
   startDesktopClock();
   renderDesktopCalendar();
@@ -3764,6 +3933,7 @@ function buildDesktop() {
   refresh();
   refreshPark();
   renderDexGrid();
+  renderCalTeamExtras();
 }
 
 if (DESKTOP_MQ.matches) buildDesktop();

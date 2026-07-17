@@ -1893,7 +1893,7 @@ h1 {
   .dt-cal-chip {
     font-size: 11px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
     padding: 3px 6px;
     border-radius: 6px;
     white-space: nowrap;
@@ -1903,6 +1903,32 @@ h1 {
   .dt-cal-chip.done {
     opacity: 0.55;
     text-decoration: line-through;
+  }
+
+  /* ---- assignments that joined today's team (due within 48h) ---- */
+  .dt-cal-team-item {
+    background-color: var(--team-card);
+    cursor: pointer;
+  }
+  .dt-cal-team-item .text {
+    flex: 1;
+  }
+  .dt-cal-team-prog {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--input-bg);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .dt-cal-team-prog[data-c="in progress"] {
+    background: var(--color-in-progress);
+    color: #fff;
+  }
+  .dt-cal-team-prog[data-c="done!"] {
+    background: var(--color-done);
+    color: #fff;
   }
 
   /* ---- calendar assignment list (right of the calendar) ---- */
