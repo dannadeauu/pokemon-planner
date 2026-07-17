@@ -1854,17 +1854,283 @@ h1 {
   }
   .dt-cal-day {
     display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    background: var(--card);
+    min-height: 92px;
+    padding: 6px;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .dt-cal-day.empty {
+    background: transparent;
+    cursor: default;
+  }
+  .dt-cal-daynum {
+    align-self: flex-end;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 4px;
+    flex-shrink: 0;
+  }
+  .dt-cal-day.today .dt-cal-daynum {
+    width: 22px;
+    height: 22px;
+    display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    min-height: 40px;
-  }
-  .dt-cal-day.today {
     background: var(--color-add);
     color: #fff;
+    border-radius: 50%;
+  }
+  .dt-cal-chips {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+  }
+  .dt-cal-chip {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    padding: 3px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dt-cal-chip.done {
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+
+  /* ---- calendar assignment list (right of the calendar) ---- */
+  .dt-cal-tasks {
+    padding: 16px 18px;
+    overflow-y: auto;
+  }
+  .dt-cal-list-head {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 22px;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    padding: 0 8px 8px;
+  }
+  .dt-cal-list-empty {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px 0;
+  }
+  .dt-cal-item {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 22px;
+    gap: 8px;
+    align-items: center;
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .dt-cal-item.done .ci-name {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+  .ci-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ci-class {
+    font-weight: 700;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ci-prog {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-align: center;
+    justify-self: start;
+    background: var(--input-bg);
+    color: var(--muted);
+  }
+  .ci-prog[data-c="in progress"] {
+    background: var(--color-in-progress);
+    color: #fff;
+  }
+  .ci-prog[data-c="done!"] {
+    background: var(--color-done);
+    color: #fff;
+  }
+  .ci-del {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  /* ---- add/edit popup ---- */
+  .dt-cal-popup {
+    position: fixed;
+    z-index: 300;
+    width: 260px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dt-cal-popup.hidden {
+    display: none;
+  }
+  .dt-pop-date {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .dt-pop-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .dt-cal-popup input,
+  .dt-cal-popup select,
+  .dt-cal-popup textarea {
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 9px 10px;
+  }
+  .dt-cal-popup textarea {
+    resize: vertical;
+  }
+  .dt-pop-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .dt-pop-save,
+  .dt-pop-delete {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 9px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .dt-pop-save {
+    background: var(--color-add);
+    color: #fff;
+  }
+  .dt-pop-delete {
+    background: var(--input-bg);
+    color: var(--text);
+  }
+
+  /* ---- class manager ---- */
+  .dt-class-editor-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 320;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .dt-class-editor-overlay.hidden {
+    display: none;
+  }
+  .dt-class-editor {
+    width: 100%;
+    max-width: 380px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 20px;
+  }
+  .dt-class-title {
+    margin: 0 0 14px;
+    font-size: 18px;
     font-weight: 800;
+  }
+  .dt-class-empty {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 12px;
+  }
+  .dt-class-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .dt-class-row .dt-class-color {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .dt-class-row .dt-class-name {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 9px 10px;
+  }
+  .dt-class-del {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .dt-class-add,
+  .dt-class-done {
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .dt-class-add {
+    background: var(--input-bg);
+    color: var(--text);
+  }
+  .dt-class-done {
+    background: var(--color-add);
+    color: #fff;
   }
 
   /* ---- pokédex (relocated tabs + grid) ---- */

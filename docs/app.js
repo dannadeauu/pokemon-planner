@@ -3321,27 +3321,369 @@ function startDesktopClock() {
   setInterval(tick, 15000);
 }
 
-// A basic month grid for the calendar box, with today highlighted.
+// ==========================================================================
+// Desktop calendar: assignments placed on their due date, colored by class.
+// Items live only on the calendar (they do NOT create team pokemon). Stored
+// locally; desktop-only, so mobile is untouched.
+// ==========================================================================
+const CAL_ITEMS_KEY = "todo-app-cal-items";
+const CAL_CLASSES_KEY = "todo-app-cal-classes";
+const CAL_NEUTRAL = "#8a8b91"; // classless items show basic gray
+const CAL_COMPLETIONS = ["not started", "in progress", "done!"];
+
+function loadCalArray(key) {
+  try {
+    const s = JSON.parse(localStorage.getItem(key));
+    if (Array.isArray(s)) return s;
+  } catch (e) {
+    // fall through to empty
+  }
+  return [];
+}
+let calItems = loadCalArray(CAL_ITEMS_KEY);
+let calClasses = loadCalArray(CAL_CLASSES_KEY);
+let calNextId = calItems.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
+let calClassNextId = calClasses.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
+
+function saveCalItems() {
+  localStorage.setItem(CAL_ITEMS_KEY, JSON.stringify(calItems));
+}
+function saveCalClasses() {
+  localStorage.setItem(CAL_CLASSES_KEY, JSON.stringify(calClasses));
+}
+function calClassById(id) {
+  return calClasses.find((c) => c.id === id) || null;
+}
+function calClassColor(id) {
+  const c = calClassById(id);
+  return c ? c.color : CAL_NEUTRAL;
+}
+function calEsc(s) {
+  const d = document.createElement("div");
+  d.textContent = s == null ? "" : String(s);
+  return d.innerHTML;
+}
+function calDateStr(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// A month grid; each day is a cell that holds its due-that-day items as colored
+// chips and opens the add/edit popup when clicked.
 function renderDesktopCalendar() {
   const el = document.getElementById("dt-calendar");
   if (!el) return;
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
-  const today = now.getDate();
+  const todayNum = now.getDate();
   const monthName = now.toLocaleString("default", { month: "long" }).toLowerCase();
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const dows = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
   let cells = dows.map((d) => `<div class="dt-cal-dow">${d}</div>`).join("");
-  for (let i = 0; i < firstDow; i++) cells += `<div class="dt-cal-day"></div>`;
+  for (let i = 0; i < firstDow; i++) cells += `<div class="dt-cal-day empty"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
-    cells += `<div class="dt-cal-day${d === today ? " today" : ""}">${d}</div>`;
+    const dateStr = calDateStr(year, month, d);
+    const chips = calItems
+      .filter((it) => it.due === dateStr)
+      .map(
+        (it) =>
+          `<div class="dt-cal-chip${it.completion === "done!" ? " done" : ""}" data-id="${it.id}" style="background:${calClassColor(it.cls)}">${calEsc(it.name)}</div>`
+      )
+      .join("");
+    cells +=
+      `<div class="dt-cal-day${d === todayNum ? " today" : ""}" data-date="${dateStr}">` +
+      `<span class="dt-cal-daynum">${d}</span>` +
+      `<div class="dt-cal-chips">${chips}</div></div>`;
   }
   el.innerHTML =
     `<div class="dt-cal-month">${monthName} ${year}</div>` +
     `<div class="dt-cal-grid">${cells}</div>`;
+
+  el.querySelectorAll(".dt-cal-day[data-date]").forEach((cell) => {
+    cell.addEventListener("click", (e) => {
+      const chip = e.target.closest(".dt-cal-chip");
+      if (chip) {
+        const item = calItems.find((it) => it.id === Number(chip.dataset.id));
+        openCalPopup(cell.dataset.date, item || null, chip);
+      } else {
+        openCalPopup(cell.dataset.date, null, cell);
+      }
+    });
+  });
+}
+
+// ---- the running list of assignments, to the right of the calendar ----
+function renderCalTasks() {
+  const el = document.getElementById("dt-cal-tasks");
+  if (!el) return;
+  const sorted = [...calItems].sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
+  let html = `<div class="dt-cal-list-head"><span>name</span><span>class</span><span>progress</span><span></span></div>`;
+  if (sorted.length === 0) {
+    html += `<div class="dt-cal-list-empty">click a day to add an assignment</div>`;
+  }
+  for (const it of sorted) {
+    const cls = calClassById(it.cls);
+    html +=
+      `<div class="dt-cal-item${it.completion === "done!" ? " done" : ""}" data-id="${it.id}">` +
+      `<span class="ci-name">${calEsc(it.name)}</span>` +
+      `<span class="ci-class"${cls ? ` style="color:${cls.color}"` : ""}>${cls ? calEsc(cls.name) : "—"}</span>` +
+      `<span class="ci-prog" data-c="${it.completion}">${it.completion}</span>` +
+      `<button class="ci-del" data-id="${it.id}" type="button" aria-label="delete">✕</button>` +
+      `</div>`;
+  }
+  el.innerHTML = html;
+  el.querySelectorAll(".dt-cal-item").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".ci-del")) return;
+      const item = calItems.find((it) => it.id === Number(row.dataset.id));
+      if (item) openCalPopup(item.due, item, row);
+    });
+  });
+  el.querySelectorAll(".ci-del").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      calItems = calItems.filter((it) => it.id !== Number(btn.dataset.id));
+      saveCalItems();
+      renderDesktopCalendar();
+      renderCalTasks();
+    });
+  });
+}
+
+// ---- the add/edit popup (appears beside the clicked cell) ----
+let calPopupEl = null;
+let calPopupItemId = null;
+let calPopupDate = null;
+let calPopupSelectedClass = "";
+
+function buildCalPopup() {
+  if (calPopupEl) return;
+  calPopupEl = document.createElement("div");
+  calPopupEl.className = "dt-cal-popup hidden";
+  calPopupEl.innerHTML =
+    `<div class="dt-pop-date"></div>` +
+    `<input class="dt-pop-name" type="text" placeholder="name" />` +
+    `<label class="dt-pop-label">class</label>` +
+    `<select class="dt-pop-class"></select>` +
+    `<label class="dt-pop-label">completion</label>` +
+    `<select class="dt-pop-completion">` +
+    CAL_COMPLETIONS.map((c) => `<option value="${c}">${c}</option>`).join("") +
+    `</select>` +
+    `<label class="dt-pop-label">notes</label>` +
+    `<textarea class="dt-pop-notes" placeholder="notes about this assignment..." rows="3"></textarea>` +
+    `<div class="dt-pop-actions">` +
+    `<button class="dt-pop-delete" type="button">delete</button>` +
+    `<button class="dt-pop-save" type="button">save</button>` +
+    `</div>`;
+  document.body.appendChild(calPopupEl);
+
+  const classSel = calPopupEl.querySelector(".dt-pop-class");
+  classSel.addEventListener("change", () => {
+    if (classSel.value === "__add__") {
+      classSel.value = calPopupSelectedClass || "";
+      openClassEditor(true);
+    } else if (classSel.value === "__edit__") {
+      classSel.value = calPopupSelectedClass || "";
+      openClassEditor(false);
+    } else {
+      calPopupSelectedClass = classSel.value;
+    }
+  });
+  calPopupEl.querySelector(".dt-pop-save").addEventListener("click", saveCalPopup);
+  calPopupEl.querySelector(".dt-pop-delete").addEventListener("click", deleteCalPopup);
+
+  document.addEventListener("mousedown", (e) => {
+    if (!calPopupEl || calPopupEl.classList.contains("hidden")) return;
+    if (
+      !calPopupEl.contains(e.target) &&
+      !e.target.closest(".dt-cal-day, .dt-cal-item, .dt-class-editor-overlay")
+    ) {
+      closeCalPopup();
+    }
+  });
+}
+
+function renderClassSelect(sel, selected) {
+  let html = `<option value="">(no class)</option>`;
+  html += calClasses.map((c) => `<option value="${c.id}">${calEsc(c.name)}</option>`).join("");
+  html += `<option value="__add__">+ add a class</option>`;
+  html += `<option value="__edit__">✎ edit classes</option>`;
+  sel.innerHTML = html;
+  sel.value = selected != null ? String(selected) : "";
+}
+
+function openCalPopup(date, item, anchorEl) {
+  buildCalPopup();
+  calPopupDate = date;
+  calPopupItemId = item ? item.id : null;
+  calPopupSelectedClass = item && item.cls ? String(item.cls) : "";
+  calPopupEl.querySelector(".dt-pop-date").textContent = "due " + date;
+  calPopupEl.querySelector(".dt-pop-name").value = item ? item.name : "";
+  renderClassSelect(calPopupEl.querySelector(".dt-pop-class"), calPopupSelectedClass);
+  calPopupEl.querySelector(".dt-pop-completion").value = item ? item.completion : "not started";
+  calPopupEl.querySelector(".dt-pop-notes").value = item ? item.notes || "" : "";
+  calPopupEl.querySelector(".dt-pop-delete").style.display = item ? "" : "none";
+  calPopupEl.classList.remove("hidden");
+  positionCalPopup(anchorEl);
+  calPopupEl.querySelector(".dt-pop-name").focus();
+}
+
+// Beside the anchor, flipping to the other side if it would run off-screen.
+function positionCalPopup(anchorEl) {
+  const rect = anchorEl.getBoundingClientRect();
+  const pw = calPopupEl.offsetWidth || 260;
+  const ph = calPopupEl.offsetHeight || 300;
+  const margin = 10;
+  let left = rect.right + margin;
+  if (left + pw > window.innerWidth - 8) left = rect.left - margin - pw;
+  if (left < 8) left = 8;
+  let top = rect.top;
+  if (top + ph > window.innerHeight - 8) top = window.innerHeight - 8 - ph;
+  if (top < 8) top = 8;
+  calPopupEl.style.left = left + "px";
+  calPopupEl.style.top = top + "px";
+}
+
+function closeCalPopup() {
+  if (calPopupEl) calPopupEl.classList.add("hidden");
+}
+
+function saveCalPopup() {
+  const name = calPopupEl.querySelector(".dt-pop-name").value.trim();
+  if (!name) {
+    calPopupEl.querySelector(".dt-pop-name").focus();
+    return;
+  }
+  const cls = calPopupSelectedClass ? Number(calPopupSelectedClass) : "";
+  const completion = calPopupEl.querySelector(".dt-pop-completion").value;
+  const notes = calPopupEl.querySelector(".dt-pop-notes").value;
+  if (calPopupItemId != null) {
+    const it = calItems.find((x) => x.id === calPopupItemId);
+    if (it) {
+      it.name = name;
+      it.cls = cls;
+      it.completion = completion;
+      it.notes = notes;
+    }
+  } else {
+    calItems.push({ id: calNextId++, name, cls, completion, notes, due: calPopupDate });
+  }
+  saveCalItems();
+  renderDesktopCalendar();
+  renderCalTasks();
+  closeCalPopup();
+}
+
+function deleteCalPopup() {
+  if (calPopupItemId != null) {
+    calItems = calItems.filter((x) => x.id !== calPopupItemId);
+    saveCalItems();
+    renderDesktopCalendar();
+    renderCalTasks();
+  }
+  closeCalPopup();
+}
+
+// ---- class manager (add classes, edit their names + colors) ----
+let classEditorEl = null;
+const CAL_CLASS_PALETTE = [
+  "#6f8f52", "#7a5c9e", "#b5643f", "#3f7fb5", "#b53f6e", "#c9a032", "#3fa08a", "#5b6bd6",
+];
+
+function randomClassColor() {
+  return CAL_CLASS_PALETTE[Math.floor(Math.random() * CAL_CLASS_PALETTE.length)];
+}
+
+function buildClassEditor() {
+  if (classEditorEl) return;
+  classEditorEl = document.createElement("div");
+  classEditorEl.className = "dt-class-editor-overlay hidden";
+  classEditorEl.innerHTML =
+    `<div class="dt-class-editor">` +
+    `<h3 class="dt-class-title">classes</h3>` +
+    `<div class="dt-class-rows"></div>` +
+    `<button class="dt-class-add" type="button">+ add a class</button>` +
+    `<button class="dt-class-done" type="button">done</button>` +
+    `</div>`;
+  document.body.appendChild(classEditorEl);
+  classEditorEl.addEventListener("mousedown", (e) => {
+    if (e.target === classEditorEl) closeClassEditor();
+  });
+  classEditorEl.querySelector(".dt-class-add").addEventListener("click", () => {
+    calClasses.push({ id: calClassNextId++, name: "new class", color: randomClassColor() });
+    saveCalClasses();
+    renderClassRows();
+  });
+  classEditorEl.querySelector(".dt-class-done").addEventListener("click", closeClassEditor);
+}
+
+function renderClassRows() {
+  const wrap = classEditorEl.querySelector(".dt-class-rows");
+  wrap.innerHTML = "";
+  if (calClasses.length === 0) {
+    wrap.innerHTML = `<p class="dt-class-empty">no classes yet</p>`;
+  }
+  calClasses.forEach((c) => {
+    const row = document.createElement("div");
+    row.className = "dt-class-row";
+    row.innerHTML =
+      `<input type="color" class="dt-class-color" value="${c.color}" />` +
+      `<input type="text" class="dt-class-name" value="${calEsc(c.name)}" />` +
+      `<button class="dt-class-del" type="button" aria-label="delete">✕</button>`;
+    const colorIn = row.querySelector(".dt-class-color");
+    const nameIn = row.querySelector(".dt-class-name");
+    const delBtn = row.querySelector(".dt-class-del");
+    colorIn.addEventListener("input", () => {
+      c.color = colorIn.value;
+      saveCalClasses();
+      renderDesktopCalendar();
+      renderCalTasks();
+    });
+    nameIn.addEventListener("input", () => {
+      c.name = nameIn.value;
+      saveCalClasses();
+    });
+    nameIn.addEventListener("change", () => {
+      renderCalTasks();
+      refreshClassSelectIfOpen();
+    });
+    delBtn.addEventListener("click", () => {
+      calClasses = calClasses.filter((x) => x.id !== c.id);
+      calItems.forEach((it) => {
+        if (it.cls === c.id) it.cls = "";
+      });
+      saveCalClasses();
+      saveCalItems();
+      renderClassRows();
+      renderDesktopCalendar();
+      renderCalTasks();
+      refreshClassSelectIfOpen();
+    });
+    wrap.appendChild(row);
+  });
+}
+
+function openClassEditor(addNew) {
+  buildClassEditor();
+  if (addNew) {
+    calClasses.push({ id: calClassNextId++, name: "new class", color: randomClassColor() });
+    saveCalClasses();
+  }
+  renderClassRows();
+  classEditorEl.classList.remove("hidden");
+}
+
+function closeClassEditor() {
+  if (classEditorEl) classEditorEl.classList.add("hidden");
+  refreshClassSelectIfOpen();
+}
+
+function refreshClassSelectIfOpen() {
+  if (calPopupEl && !calPopupEl.classList.contains("hidden")) {
+    renderClassSelect(calPopupEl.querySelector(".dt-pop-class"), calPopupSelectedClass);
+  }
 }
 
 let desktopBuilt = false;
@@ -3416,6 +3758,7 @@ function buildDesktop() {
   applyUiPrefs();
   startDesktopClock();
   renderDesktopCalendar();
+  renderCalTasks();
 
   // populate the relocated widgets
   refresh();
