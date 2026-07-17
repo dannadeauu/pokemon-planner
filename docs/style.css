@@ -2222,3 +2222,61 @@ h1 {
     margin-top: 4px;
   }
 }
+
+/* Friends menu: everyone's team as PC icon sprites + their messages, with a
+   text-colored sparkle by completed teams. Desktop-only (mobile already has
+   the pokepark page for this). */
+.friends-teams {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .friends-teams {
+    display: block;
+    margin-top: 22px;
+  }
+  .friends-teams .ft-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 17px;
+    font-weight: 700;
+    margin: 20px 0 8px;
+  }
+  .friends-teams .ft-title:first-child {
+    margin-top: 0;
+  }
+  .friends-teams .ft-title .shiny-star {
+    width: 15px;
+    height: 15px;
+    color: var(--text);
+    margin: 0;
+  }
+  .friends-teams .ft-icons {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    align-items: center;
+    background: var(--team-card);
+    border-radius: 14px;
+    padding: 12px 8px;
+  }
+  .friends-teams .ft-icons img {
+    height: 40px;
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    object-fit: contain;
+  }
+  .friends-teams .ft-msg {
+    margin: 8px 2px 0;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--muted);
+  }
+  .friends-teams .ft-empty {
+    margin: 6px 2px 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+}

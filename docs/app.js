@@ -2373,6 +2373,7 @@ async function refreshFriends() {
     if (friendsChanged) renderParkMine();
     renderParkFriends();
     renderFriendRequests();
+    renderFriendsTeams();
   } catch (e) {
     // offline or friends.sql not run yet - keep cached state
   }
@@ -2485,6 +2486,67 @@ function showFormNote(el, msg) {
   el.classList.add("success");
 }
 
+// A read-only look at everyone's team (as PC icon sprites) + their messages,
+// shown in the friends menu below the hide-tasks toggle. Desktop-only, so the
+// mobile friends menu (which already has the pokepark page) is unchanged.
+function renderFriendsTeams() {
+  const el = document.getElementById("friends-teams");
+  if (!el) return;
+  if (!window.matchMedia || !window.matchMedia("(min-width: 1024px)").matches) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = "";
+
+  const iconRow = (items) => {
+    const box = document.createElement("div");
+    box.className = "ft-icons";
+    for (const p of items.slice(0, 6)) {
+      const img = document.createElement("img");
+      img.src = p.icon;
+      img.alt = p.name || "";
+      box.appendChild(img);
+    }
+    return box;
+  };
+  const addMsg = (text, prefix) => {
+    const t = (text || "").trim();
+    if (!t) return;
+    const p = document.createElement("p");
+    p.className = "ft-msg";
+    p.textContent = prefix ? `message: "${t}"` : `"${t}"`;
+    el.appendChild(p);
+  };
+
+  // my team
+  const myTitle = document.createElement("h3");
+  myTitle.className = "ft-title";
+  myTitle.textContent = "my team";
+  el.appendChild(myTitle);
+  el.appendChild(iconRow(lastTeamTodos.slice(0, 6).map((t) => ({ icon: t.pokemon.icon, name: t.pokemon.name }))));
+  addMsg(parkMessage, true);
+
+  // each friend
+  for (const friend of friends) {
+    const snap = friend.snapshot || null;
+    const title = document.createElement("h3");
+    title.className = "ft-title";
+    title.textContent = `${friend.nickname}'s team`;
+    if (snap && snap.fully_evolved) title.insertAdjacentHTML("beforeend", SHINY_STAR_SVG);
+    el.appendChild(title);
+    const team = snap && Array.isArray(snap.team) ? snap.team : [];
+    if (team.length) {
+      el.appendChild(iconRow(team.map((p) => ({ icon: p.icon || dexIconUrl(p.dex_id, p.shiny), name: p.name }))));
+    } else {
+      const e = document.createElement("p");
+      e.className = "ft-empty";
+      e.textContent = "no team synced yet";
+      el.appendChild(e);
+    }
+    addMsg(snap && snap.message, false);
+  }
+}
+
 function renderFriendsMenu() {
   friendsHomeViewEl.classList.remove("hidden");
   friendsNicknameViewEl.classList.add("hidden");
@@ -2502,6 +2564,7 @@ function renderFriendsMenu() {
     renderFriendRequests();
     hideTasksToggleEl.classList.toggle("on", hideTasks);
     hideTasksToggleEl.setAttribute("aria-checked", String(hideTasks));
+    renderFriendsTeams();
   }
 }
 
