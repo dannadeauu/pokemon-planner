@@ -3864,6 +3864,8 @@ function buildDesktop() {
   };
   move(document.getElementById("team-grid"), document.getElementById("dt-team-slot"));
   const tasksSlot = document.getElementById("dt-tasks-slot");
+  // companion sits above the add button, then the add form, then the list
+  move(document.getElementById("companion-row"), tasksSlot);
   move(document.getElementById("add-form"), tasksSlot);
   move(document.getElementById("todo-list"), tasksSlot);
   move(document.getElementById("park-mine"), document.getElementById("dt-park-slot"));
