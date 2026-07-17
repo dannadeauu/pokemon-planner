@@ -373,6 +373,10 @@ function companionSpriteUrl(name, shiny) {
 // scroll chaining), which lingers as a black bar above the fixed pages.
 // Force the viewport back to the top whenever an overlay closes.
 function resetViewportScroll() {
+  // Desktop scrolls the window itself, so resetting it would jump the user to
+  // the top when closing an overlay (e.g. a pokedex entry). This fix is only
+  // needed for the mobile fixed-page layout.
+  if (window.matchMedia && window.matchMedia("(min-width: 1024px)").matches) return;
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   window.scrollTo(0, 0);
   document.documentElement.scrollTop = 0;
@@ -3186,13 +3190,14 @@ const DESKTOP_MQ = window.matchMedia("(min-width: 1024px)");
 
 const UI_PREFS_KEY = "todo-app-ui-prefs";
 function loadUiPrefs() {
+  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50 };
   try {
     const s = JSON.parse(localStorage.getItem(UI_PREFS_KEY));
-    if (s && typeof s === "object") return { banner: "", title: "pokeplanner", spotify: "", ...s };
+    if (s && typeof s === "object") return { ...defaults, ...s };
   } catch (e) {
     // fall through to defaults
   }
-  return { banner: "", title: "pokeplanner", spotify: "" };
+  return { ...defaults };
 }
 let uiPrefs = loadUiPrefs();
 function saveUiPrefs() {
@@ -3203,7 +3208,7 @@ function saveUiPrefs() {
 let uiSyncTimer = null;
 let lastSyncedUi = null;
 function uiSyncBody() {
-  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify });
+  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos });
 }
 function touchUiPrefs() {
   uiPrefs.updatedAt = new Date().toISOString();
@@ -3221,7 +3226,7 @@ async function pushUi() {
     if (!authSession) return;
     await supabaseRpc(
       "push_ui",
-      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, updatedAt: uiPrefs.updatedAt } },
+      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, updatedAt: uiPrefs.updatedAt } },
       authSession.access_token
     );
     lastSyncedUi = body;
@@ -3246,6 +3251,7 @@ async function pullUi() {
       if (typeof d.banner === "string") uiPrefs.banner = d.banner;
       if (typeof d.title === "string") uiPrefs.title = d.title;
       if (typeof d.spotify === "string") uiPrefs.spotify = d.spotify;
+      if (typeof d.bannerPos === "number") uiPrefs.bannerPos = d.bannerPos;
       uiPrefs.updatedAt = remote.updated_at;
       saveUiPrefs();
       lastSyncedUi = uiSyncBody();
@@ -3279,7 +3285,11 @@ function renderSpotifyEmbed() {
 
 function applyUiPrefs() {
   const banner = document.getElementById("dt-banner");
-  if (banner) banner.style.backgroundImage = uiPrefs.banner ? `url("${uiPrefs.banner}")` : "";
+  if (banner) {
+    banner.style.backgroundImage = uiPrefs.banner ? `url("${uiPrefs.banner}")` : "";
+    banner.classList.toggle("has-image", Boolean(uiPrefs.banner));
+    banner.style.backgroundPosition = `center ${uiPrefs.bannerPos != null ? uiPrefs.bannerPos : 50}%`;
+  }
   const title = document.getElementById("dt-title");
   if (title && document.activeElement !== title) title.textContent = uiPrefs.title || "pokeplanner";
   renderSpotifyEmbed();
@@ -3883,6 +3893,7 @@ function buildDesktop() {
   });
 
   // editable banner
+  const bannerEl = document.getElementById("dt-banner");
   const bannerInput = document.getElementById("dt-banner-input");
   document.getElementById("dt-banner-edit").addEventListener("click", () => bannerInput.click());
   bannerInput.addEventListener("change", (e) => {
@@ -3893,10 +3904,42 @@ function buildDesktop() {
     reader.onload = () =>
       downscaleImage(reader.result, 1600, 0.82).then((url) => {
         uiPrefs.banner = url;
+        uiPrefs.bannerPos = 50; // reset framing for the new image
         applyUiPrefs();
         touchUiPrefs();
       });
     reader.readAsDataURL(file);
+  });
+
+  // reposition: drag the banner up/down to reframe it (Notion-style)
+  const repositionBtn = document.getElementById("dt-banner-reposition");
+  let repositioning = false;
+  repositionBtn.addEventListener("click", () => {
+    repositioning = !repositioning;
+    bannerEl.classList.toggle("repositioning", repositioning);
+    repositionBtn.textContent = repositioning ? "done" : "reposition";
+    if (!repositioning) touchUiPrefs(); // save framing on exit
+  });
+  bannerEl.addEventListener("pointerdown", (e) => {
+    if (!repositioning || !uiPrefs.banner) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    const startPos = uiPrefs.bannerPos != null ? uiPrefs.bannerPos : 50;
+    const h = bannerEl.offsetHeight || 160;
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY;
+      let pos = startPos - (dy / h) * 100; // drag down -> reveal the top
+      pos = Math.max(0, Math.min(100, pos));
+      uiPrefs.bannerPos = pos;
+      bannerEl.style.backgroundPosition = `center ${pos}%`;
+    };
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      saveUiPrefs();
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
   });
 
   // editable title
