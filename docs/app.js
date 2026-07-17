@@ -3321,6 +3321,29 @@ function startDesktopClock() {
   setInterval(tick, 15000);
 }
 
+// A basic month grid for the calendar box, with today highlighted.
+function renderDesktopCalendar() {
+  const el = document.getElementById("dt-calendar");
+  if (!el) return;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const monthName = now.toLocaleString("default", { month: "long" }).toLowerCase();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const dows = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+  let cells = dows.map((d) => `<div class="dt-cal-dow">${d}</div>`).join("");
+  for (let i = 0; i < firstDow; i++) cells += `<div class="dt-cal-day"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells += `<div class="dt-cal-day${d === today ? " today" : ""}">${d}</div>`;
+  }
+  el.innerHTML =
+    `<div class="dt-cal-month">${monthName} ${year}</div>` +
+    `<div class="dt-cal-grid">${cells}</div>`;
+}
+
 let desktopBuilt = false;
 function buildDesktop() {
   if (desktopBuilt) return;
@@ -3392,6 +3415,7 @@ function buildDesktop() {
 
   applyUiPrefs();
   startDesktopClock();
+  renderDesktopCalendar();
 
   // populate the relocated widgets
   refresh();
