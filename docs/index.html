@@ -24,7 +24,13 @@
     <div class="dt-banner" id="dt-banner">
       <div class="dt-banner-btns">
         <button class="dt-banner-btn dt-banner-reposition" id="dt-banner-reposition" type="button">reposition</button>
-        <button class="dt-banner-btn" id="dt-banner-edit" type="button">change banner</button>
+        <div class="dt-banner-edit-wrap">
+          <button class="dt-banner-btn" id="dt-banner-edit" type="button">change banner</button>
+          <div class="dt-banner-menu hidden" id="dt-banner-menu">
+            <button class="dt-banner-menu-item" id="dt-banner-upload" type="button">upload from device</button>
+            <button class="dt-banner-menu-item" id="dt-banner-link" type="button">paste image link</button>
+          </div>
+        </div>
       </div>
       <input type="file" id="dt-banner-input" accept="image/*" hidden />
     </div>
@@ -237,6 +243,7 @@
           <div class="color-row"><label for="pe-clock">clock</label><input type="color" id="pe-clock" /></div>
           <div class="color-row"><label for="pe-primary">primary buttons</label><input type="color" id="pe-primary" /></div>
           <div class="color-row"><label for="pe-secondary">secondary buttons</label><input type="color" id="pe-secondary" /></div>
+          <button class="friends-btn friends-btn-secondary" id="pe-reset-colors" type="button">reset to default colors</button>
         </div>
       </div>
       </div><!-- /hub-pane-settings -->

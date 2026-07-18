@@ -1519,6 +1519,12 @@ h1 {
 }
 
 .dex-cell.undiscovered img {
+  /* light mode: pale gray silhouette */
+  filter: brightness(0) invert(0.8);
+  opacity: 0.6;
+}
+body.theme-dark .dex-cell.undiscovered img {
+  /* dark mode: keep the dark silhouette */
   filter: brightness(0);
   opacity: 0.5;
 }
@@ -1627,7 +1633,7 @@ h1 {
   .dt-banner {
     position: relative;
     width: 100%;
-    height: 160px;
+    height: 200px;
     background: var(--color-add);
     background-size: cover;
     background-position: center;
@@ -1655,6 +1661,42 @@ h1 {
     color: #fff;
     background: rgba(0, 0, 0, 0.42);
     cursor: pointer;
+  }
+  /* "change banner" pops a small menu: upload vs. paste a link */
+  .dt-banner-edit-wrap {
+    position: relative;
+  }
+  .dt-banner-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.72);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .dt-banner-menu.hidden {
+    display: none;
+  }
+  .dt-banner-menu-item {
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .dt-banner-menu-item:hover {
+    background: rgba(255, 255, 255, 0.16);
   }
   /* reposition only makes sense once an image is set */
   .dt-banner-reposition {

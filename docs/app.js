@@ -855,6 +855,16 @@ function initSettings() {
         touchUiPrefs();
       });
     }
+    const resetColorsBtn = document.getElementById("pe-reset-colors");
+    if (resetColorsBtn) {
+      resetColorsBtn.addEventListener("click", () => {
+        // drop the custom overrides so the layout falls back to the theme colors
+        pageLayout().colors = {};
+        applyPageLayout();
+        syncPageEditColorInputs();
+        touchUiPrefs();
+      });
+    }
   }
 
   matchCompanionBtnEl.addEventListener("click", () => {
@@ -4563,7 +4573,35 @@ function buildDesktop() {
   // editable banner
   const bannerEl = document.getElementById("dt-banner");
   const bannerInput = document.getElementById("dt-banner-input");
-  document.getElementById("dt-banner-edit").addEventListener("click", () => bannerInput.click());
+  const bannerMenu = document.getElementById("dt-banner-menu");
+  const closeBannerMenu = () => bannerMenu.classList.add("hidden");
+  // "change banner" opens a little menu: upload a file or paste an image link
+  document.getElementById("dt-banner-edit").addEventListener("click", (e) => {
+    e.stopPropagation();
+    bannerMenu.classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!bannerMenu.contains(e.target) && e.target.id !== "dt-banner-edit") closeBannerMenu();
+  });
+  document.getElementById("dt-banner-upload").addEventListener("click", () => {
+    closeBannerMenu();
+    bannerInput.click();
+  });
+  document.getElementById("dt-banner-link").addEventListener("click", () => {
+    closeBannerMenu();
+    const link = window.prompt("paste an image link (url):", "");
+    if (link === null) return;
+    const url = link.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      window.alert("please paste a valid image link starting with http:// or https://");
+      return;
+    }
+    uiPrefs.banner = url;
+    uiPrefs.bannerPos = 50; // reset framing for the new image
+    applyUiPrefs();
+    touchUiPrefs();
+  });
   bannerInput.addEventListener("change", (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
