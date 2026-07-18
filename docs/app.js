@@ -3707,11 +3707,11 @@ function itemMaxWidth(el) {
   const cellRight = cellLeft + tracks[idx];
   // stay within the column; the last column's right edge is the content edge
   // (i.e. the right margin border), so items never spill into the margin
-  return Math.max(80, cellRight - cellLeft);
+  return Math.max(1, cellRight - cellLeft);
 }
 
 // ---- column / margin geometry (page edit mode) ----
-const MIN_COL = 10; // minimum width for any resizable column
+const MIN_COL = 70; // minimum width for any resizable column
 const DASH_MINS_MARGIN = 0; // margins may shrink to the screen edge
 
 // Scale `sizes` to sum to `total`, then enforce per-index minimums, pulling the
@@ -3798,6 +3798,38 @@ function applyDashSizes(sizes) {
   root.style.setProperty("--dt-mr", mr + "px");
   root.style.setProperty("--dt-content-max", "none");
   dash.style.gridTemplateColumns = cols.map((c) => c + "px").join(" ");
+  // a narrower column must squeeze the boxes inside it (never let them spill out)
+  clampItemsToColumns();
+  alignBoxTitles();
+}
+
+// Keep every resized box within its column: width = min(saved width, column).
+// Growing the column back restores the box up to its saved width.
+function clampItemsToColumns() {
+  const items = pageLayout().items || {};
+  for (const item of PAGE_ITEMS) {
+    const el = document.querySelector(item.sel);
+    if (!el) continue;
+    const size = items[item.id];
+    if (!size || !size.w) continue;
+    el.style.width = Math.min(size.w, itemMaxWidth(el)) + "px";
+    el.style.marginLeft = "auto";
+    el.style.marginRight = "auto";
+    el.style.flex = "none";
+  }
+}
+
+// Box titles (habit tracker / pokepark) hug the top-left corner of their box as
+// it's resized, instead of staying pinned to the column's left border.
+function alignBoxTitles() {
+  for (const sel of [".dt-habit-box", ".dt-park-box"]) {
+    const box = document.querySelector(sel);
+    if (!box) continue;
+    const heading = box.previousElementSibling;
+    if (!heading || heading.tagName !== "H2") continue;
+    const ml = parseFloat(getComputedStyle(box).marginLeft) || 0;
+    heading.style.marginLeft = ml > 0 ? ml + "px" : "";
+  }
 }
 
 // Apply the saved sizes + colors to the desktop layout (idempotent).
@@ -3868,6 +3900,7 @@ function applyPageLayout() {
       el.style.flex = "";
     }
   }
+  alignBoxTitles();
   fixItemOverlaps();
 }
 
@@ -3946,9 +3979,13 @@ function buildColHandles(gridEl, storeKey) {
           const next = moveBoundary(cols, mins, i, dx);
           gridEl.style.gridTemplateColumns = next.map((c) => Math.round(c) + "px").join(" ");
           place();
+          clampItemsToColumns(); // squeeze boxes that the new column can't hold
+          alignBoxTitles();
         },
         () => {
           pageLayout()[storeKey] = gridEl.style.gridTemplateColumns;
+          clampItemsToColumns();
+          alignBoxTitles();
           fixItemOverlaps();
           touchUiPrefs();
         }
@@ -4066,6 +4103,7 @@ function buildItemHandles() {
           el.style.marginLeft = "auto";
           el.style.marginRight = "auto";
           el.style.flex = "none";
+          alignBoxTitles(); // keep the title pinned to the box's top-left
         },
         () => {
           pageLayout().items = pageLayout().items || {};
@@ -4073,6 +4111,7 @@ function buildItemHandles() {
             w: Math.round(el.getBoundingClientRect().width),
             h: Math.round(el.getBoundingClientRect().height),
           };
+          alignBoxTitles();
           fixItemOverlaps();
           touchUiPrefs();
         }
