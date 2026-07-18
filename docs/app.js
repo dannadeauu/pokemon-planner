@@ -3888,13 +3888,23 @@ function applyPageLayout() {
       // clamp to the current viewport so a width saved on a wider screen can't
       // spill past the edge / into another column after a refresh or resize
       if (size.w) el.style.width = Math.min(size.w, itemMaxWidth(el)) + "px";
-      if (size.h) el.style.height = size.h + "px";
+      if (size.h) {
+        if (item.id === "habit") {
+          // the habit box treats its size as a minimum so wrapping month dots
+          // can extend it instead of overflowing
+          el.style.minHeight = size.h + "px";
+          el.style.height = "auto";
+        } else {
+          el.style.height = size.h + "px";
+        }
+      }
       el.style.marginLeft = "auto";
       el.style.marginRight = "auto"; // stay centered in the cell when smaller
       el.style.flex = "none";
     } else {
       el.style.width = "";
       el.style.height = "";
+      if (item.id === "habit") el.style.minHeight = "";
       el.style.marginLeft = "";
       el.style.marginRight = "";
       el.style.flex = "";
@@ -4263,7 +4273,13 @@ function buildItemHandles() {
           const w = Math.min(maxW, Math.max(80, rect.width + dx));
           const h = Math.max(60, rect.height + dy);
           el.style.width = w + "px";
-          el.style.height = h + "px";
+          if (item.id === "habit") {
+            // min-height so the box can still stretch for wrapping month dots
+            el.style.minHeight = h + "px";
+            el.style.height = "auto";
+          } else {
+            el.style.height = h + "px";
+          }
           el.style.marginLeft = "auto";
           el.style.marginRight = "auto";
           el.style.flex = "none";

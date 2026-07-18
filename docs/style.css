@@ -1806,39 +1806,45 @@ body.theme-dark .dex-cell.undiscovered img {
     min-height: 150px;
   }
 
-  /* ---- habit tracker ---- */
+  /* ---- habit tracker ----
+     One tinted box holds a row of white day pills plus the centered month-dot
+     strip; the three editable habit checks sit below the box. No dot outlines:
+     every dot is a solid disc that changes color as habits complete. */
   .dt-habit-box {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 14px;
+    gap: 16px;
+    padding: 16px;
     min-height: 0;
+    height: auto; /* grows with content (e.g. month dots wrapping) */
   }
   .habit-week {
-    background: var(--card);
-    border-radius: 14px;
-    padding: 12px 6px 14px;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 8px;
+    flex: 1 1 auto;
   }
   .habit-day {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 12px 4px 14px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
+    min-height: 108px;
   }
   .habit-day-label {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
-    color: var(--muted);
+    color: var(--text);
   }
   .habit-day.today .habit-day-label {
     background: var(--color-add);
@@ -1848,67 +1854,59 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
   .habit-wdot {
-    width: 11px;
-    height: 11px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    border: 2px solid var(--border);
-    background: transparent;
-    box-sizing: border-box;
+    background: var(--input-bg); /* soft gray, no outline */
   }
   .habit-wdot.filled {
-    background: var(--dt-btn-secondary, var(--team-card));
-    border-color: var(--dt-btn-primary, var(--muted));
+    background: var(--color-add);
   }
-  /* monthly strip: one dot per day of the month */
+  /* monthly strip: one solid dot per day, centered in the same tinted box;
+     wraps into centered rows when the box gets too narrow */
   .habit-month {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    padding: 2px 2px 4px;
+    justify-content: center;
+    gap: 6px;
+    row-gap: 8px;
+    padding: 0 2px 2px;
   }
   .habit-mdot {
-    width: 9px;
-    height: 9px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    border: 1.5px solid var(--border);
-    background: transparent;
-    box-sizing: border-box;
+    background: var(--card); /* starts white (dark gray card in dark mode) */
   }
   .habit-mdot.full {
     background: var(--dt-btn-primary, var(--input-bg));
-    border-color: var(--dt-btn-primary, var(--input-bg));
   }
   .habit-mdot.half {
     background: linear-gradient(
-      90deg,
+      to top,
       var(--dt-btn-primary, var(--input-bg)) 0 50%,
-      transparent 50% 100%
+      var(--card) 50% 100%
     );
-    border-color: var(--dt-btn-primary, var(--input-bg));
-  }
-  .habit-mdot.today {
-    outline: 2px solid var(--color-add);
-    outline-offset: 1px;
   }
   /* the three editable habit checkboxes below the box */
   .habit-checks {
     display: flex;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 10px;
+    margin-top: 14px;
   }
   .habit-check {
     flex: 1;
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 12px;
+    gap: 10px;
+    background: var(--dt-btn-primary, var(--card));
+    border: none;
+    border-radius: 14px;
+    padding: 12px 14px;
   }
   .habit-check.checked {
     background: var(--dt-btn-secondary, var(--team-card));
@@ -1918,7 +1916,7 @@ body.theme-dark .dex-cell.undiscovered img {
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    border: 2px solid var(--muted);
+    border: 2.5px solid var(--muted);
     background: transparent;
     display: flex;
     align-items: center;
@@ -1941,7 +1939,7 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1;
     min-width: 0;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text);
     outline: none;
     overflow-wrap: anywhere;
