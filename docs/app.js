@@ -395,7 +395,42 @@ const DEFAULT_SETTINGS = {
   companion: "",
   matchCompanion: false,
   matchCompanionDone: false,
+  font: "Baloo 2",
 };
+
+// Selectable app fonts. `google` is the fonts.googleapis.com family param (null
+// for system fonts that need no download).
+const APP_FONTS = [
+  { label: "Baloo 2", stack: "'Baloo 2', sans-serif", google: "Baloo+2:wght@500;600;700;800" },
+  { label: "Arial", stack: "Arial, Helvetica, sans-serif", google: null },
+  { label: "Playfair Display", stack: "'Playfair Display', serif", google: "Playfair+Display:wght@500;600;700;800" },
+  { label: "Fraunces", stack: "'Fraunces', serif", google: "Fraunces:wght@500;600;700" },
+  { label: "Cormorant Garamond", stack: "'Cormorant Garamond', serif", google: "Cormorant+Garamond:wght@600;700" },
+  { label: "PT Serif", stack: "'PT Serif', serif", google: "PT+Serif:wght@400;700" },
+];
+
+function appFontByLabel(label) {
+  return APP_FONTS.find((f) => f.label === label) || APP_FONTS[0];
+}
+
+// Apply the chosen font app-wide: load it (if it needs downloading) and set the
+// document font so everything using `inherit` picks it up.
+function applyFont() {
+  const font = appFontByLabel(settings.font);
+  let link = document.getElementById("app-font-link");
+  if (font.google) {
+    const href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
+    if (!link) {
+      link = document.createElement("link");
+      link.id = "app-font-link";
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    if (link.href !== href) link.href = href;
+  }
+  document.documentElement.style.setProperty("--app-font", font.stack);
+  document.body.style.fontFamily = font.stack;
+}
 
 function loadSettings() {
   try {
@@ -609,13 +644,69 @@ function applyMatchCompanion() {
   }
 }
 
+// Font picker: a button that opens a menu of fonts, each shown in its own face.
+function updateFontButton() {
+  const btn = document.getElementById("font-btn");
+  if (!btn) return;
+  const font = appFontByLabel(settings.font);
+  btn.textContent = font.label;
+  btn.style.fontFamily = font.stack;
+}
+function buildFontMenu() {
+  const menu = document.getElementById("font-menu");
+  if (!menu) return;
+  menu.innerHTML = "";
+  for (const f of APP_FONTS) {
+    const opt = document.createElement("button");
+    opt.type = "button";
+    opt.className = "font-option" + (f.label === settings.font ? " active" : "");
+    opt.textContent = f.label;
+    opt.style.fontFamily = f.stack;
+    if (f.google && !document.querySelector(`link[data-font-preload="${f.label}"]`)) {
+      // preload once so the option renders in its real face
+      const pre = document.createElement("link");
+      pre.rel = "stylesheet";
+      pre.dataset.fontPreload = f.label;
+      pre.href = `https://fonts.googleapis.com/css2?family=${f.google}&display=swap`;
+      document.head.appendChild(pre);
+    }
+    opt.addEventListener("click", () => {
+      settings.font = f.label;
+      saveSettings(settings);
+      applyFont();
+      updateFontButton();
+      buildFontMenu();
+      menu.classList.add("hidden");
+      touchPrefs();
+    });
+    menu.appendChild(opt);
+  }
+}
+
 function initSettings() {
   applyTheme();
   applyColors();
+  applyFont();
   populateCompanionSelect();
   applyCompanion();
   updateMatchCompanionButtons();
   applyMatchCompanion();
+
+  const fontBtn = document.getElementById("font-btn");
+  const fontMenu = document.getElementById("font-menu");
+  if (fontBtn && fontMenu) {
+    updateFontButton();
+    buildFontMenu();
+    fontBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fontMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!fontMenu.classList.contains("hidden") && !e.target.closest(".font-picker")) {
+        fontMenu.classList.add("hidden");
+      }
+    });
+  }
 
   matchCompanionBtnEl.addEventListener("click", () => {
     settings.matchCompanion = !settings.matchCompanion;
@@ -2929,7 +3020,7 @@ async function pullDex() {
 let prefsSyncTimer = null;
 
 function prefsSyncPayload() {
-  return { companion: settings.companion, parkMessage };
+  return { companion: settings.companion, parkMessage, font: settings.font };
 }
 
 function schedulePrefsSync() {
@@ -2966,8 +3057,11 @@ async function pullPrefs() {
       const data = remote.data;
       const companion = typeof data.companion === "string" ? data.companion : settings.companion;
       const message = typeof data.parkMessage === "string" ? data.parkMessage : parkMessage;
-      const changed = companion !== settings.companion || message !== parkMessage;
+      const font = typeof data.font === "string" ? data.font : settings.font;
+      const fontChanged = font !== settings.font;
+      const changed = companion !== settings.companion || message !== parkMessage || fontChanged;
       settings.companion = companion;
+      settings.font = font;
       saveSettings(settings);
       parkMessage = message;
       localStorage.setItem(PARK_MSG_KEY, parkMessage);
@@ -2979,6 +3073,11 @@ async function pullPrefs() {
         applyMatchCompanion();
         const msgInput = document.querySelector(".park-msg-input");
         if (msgInput) msgInput.value = parkMessage;
+      }
+      if (fontChanged) {
+        applyFont();
+        updateFontButton();
+        buildFontMenu();
       }
     } else {
       schedulePrefsSync(); // this device is newer: push it up
