@@ -3670,6 +3670,36 @@ function pageLayout() {
   return uiPrefs.pageLayout;
 }
 
+// Widest a resizable box may grow: it stays inside its own grid column, except
+// the outer columns, which may run out to the viewport edge (into the page
+// margin). A box grows rightward from its column's left edge, so the limit is
+// (right boundary − column left), where the right boundary is the viewport edge
+// for the last column or the column's own right edge otherwise.
+function itemMaxWidth(el) {
+  let cell = el;
+  while (
+    cell.parentElement &&
+    !cell.parentElement.classList.contains("dt-dashboard") &&
+    !cell.parentElement.classList.contains("dt-cal-row")
+  ) {
+    cell = cell.parentElement;
+  }
+  const grid = cell.parentElement;
+  if (!grid) return Infinity;
+  const cs = getComputedStyle(grid);
+  const tracks = cs.gridTemplateColumns.split(" ").map(parseFloat).filter((n) => !isNaN(n));
+  const gap = parseFloat(cs.columnGap) || 0;
+  const padL = parseFloat(cs.paddingLeft) || 0;
+  const idx = [...grid.children].indexOf(cell);
+  if (idx < 0 || idx >= tracks.length) return Infinity;
+  let cellLeft = grid.getBoundingClientRect().left + padL;
+  for (let i = 0; i < idx; i++) cellLeft += tracks[i] + gap;
+  const cellRight = cellLeft + tracks[idx];
+  const isLast = idx === tracks.length - 1;
+  const rightBoundary = isLast ? document.documentElement.clientWidth : cellRight;
+  return Math.max(80, rightBoundary - cellLeft);
+}
+
 // Apply the saved sizes + colors to the desktop layout (idempotent).
 function applyPageLayout() {
   if (!document.getElementById("dt-root")) return;
@@ -3700,7 +3730,9 @@ function applyPageLayout() {
     if (!el) continue;
     const size = items[item.id];
     if (size && (size.w || size.h)) {
-      if (size.w) el.style.width = size.w + "px";
+      // clamp to the current viewport so a width saved on a wider screen can't
+      // spill past the edge / into another column after a refresh or resize
+      if (size.w) el.style.width = Math.min(size.w, itemMaxWidth(el)) + "px";
       if (size.h) el.style.height = size.h + "px";
       el.style.marginLeft = "auto";
       el.style.marginRight = "auto"; // stay centered in the cell when smaller
@@ -3862,10 +3894,11 @@ function buildItemHandles() {
     handle.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       const rect = el.getBoundingClientRect();
+      const maxW = itemMaxWidth(el); // stay in-column; outer columns reach the edge
       pageDrag(
         e,
         (dx, dy) => {
-          const w = Math.max(80, rect.width + dx);
+          const w = Math.min(maxW, Math.max(80, rect.width + dx));
           const h = Math.max(60, rect.height + dy);
           el.style.width = w + "px";
           el.style.height = h + "px";
