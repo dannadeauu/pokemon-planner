@@ -2509,9 +2509,6 @@ h1 {
   }
   .dt-resizable {
     position: relative;
-    /* never let a resized box spill out of / overlap its column — keep each
-       object on its own line, centered within the column width */
-    max-width: 100%;
     box-sizing: border-box;
   }
   /* dashed hint around resizable items while editing */

@@ -3862,17 +3862,10 @@ function buildItemHandles() {
     handle.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       const rect = el.getBoundingClientRect();
-      // don't let a box grow past its column so it can't overlap its neighbors
-      const parent = el.parentElement;
-      const maxW = parent
-        ? parent.clientWidth -
-          parseFloat(getComputedStyle(parent).paddingLeft) -
-          parseFloat(getComputedStyle(parent).paddingRight)
-        : Infinity;
       pageDrag(
         e,
         (dx, dy) => {
-          const w = Math.min(maxW, Math.max(80, rect.width + dx));
+          const w = Math.max(80, rect.width + dx);
           const h = Math.max(60, rect.height + dy);
           el.style.width = w + "px";
           el.style.height = h + "px";
