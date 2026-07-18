@@ -484,7 +484,9 @@ function applyColors() {
 }
 
 function companionDisplayName(value) {
-  return value ? value.replace(/-/g, " ") : "";
+  if (!value) return "";
+  const match = COMPANIONS.find((c) => c.value === value);
+  return match ? match.label : value.replace(/-/g, " ");
 }
 
 // Keep the search box showing the current companion (unless the user is typing).
