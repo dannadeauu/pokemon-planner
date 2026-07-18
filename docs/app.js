@@ -3928,6 +3928,170 @@ function fixItemOverlaps() {
   });
 }
 
+// ==========================================================================
+// Habit tracker (desktop): a weekly calendar of habit dots, a month-long dot
+// strip, and three editable daily habit checkboxes. State is stored locally.
+// ==========================================================================
+const HABITS_KEY = "todo-app-habits";
+const HABIT_COUNT = 3;
+// Placeholder dot counts per weekday (Sun..Sat): 3 on Mon/Wed/Fri, 2 otherwise.
+const HABIT_DOTS_BY_DAY = [2, 3, 2, 3, 2, 3, 2];
+const HABIT_DEFAULT_LABELS = ["3 bottles/water", "active", "journal/meditate"];
+
+function loadHabits() {
+  try {
+    const s = JSON.parse(localStorage.getItem(HABITS_KEY));
+    if (s && typeof s === "object") {
+      return {
+        labels:
+          Array.isArray(s.labels) && s.labels.length === HABIT_COUNT
+            ? s.labels
+            : HABIT_DEFAULT_LABELS.slice(),
+        log: s.log && typeof s.log === "object" ? s.log : {},
+      };
+    }
+  } catch (e) {
+    // fall through to defaults
+  }
+  return { labels: HABIT_DEFAULT_LABELS.slice(), log: {} };
+}
+let habitData = loadHabits();
+function saveHabits() {
+  localStorage.setItem(HABITS_KEY, JSON.stringify(habitData));
+}
+
+function habitDateKey(d) {
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+function habitDayState(key) {
+  const v = habitData.log[key];
+  if (Array.isArray(v)) {
+    const out = v.slice(0, HABIT_COUNT);
+    while (out.length < HABIT_COUNT) out.push(false);
+    return out;
+  }
+  return Array(HABIT_COUNT).fill(false);
+}
+function habitCompletedCount(key) {
+  return habitDayState(key).filter(Boolean).length;
+}
+function habitDotCount(dayIndex) {
+  return HABIT_DOTS_BY_DAY[dayIndex];
+}
+
+function renderHabitWeek() {
+  const el = document.getElementById("habit-week");
+  if (!el) return;
+  el.innerHTML = "";
+  const letters = ["s", "m", "t", "w", "th", "f", "sa"];
+  const today = new Date();
+  const todayKey = habitDateKey(today);
+  const start = new Date(today);
+  start.setDate(today.getDate() - today.getDay()); // Sunday of this week
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = habitDateKey(d);
+    const dots = habitDotCount(i);
+    const filled = Math.min(habitCompletedCount(key), dots);
+
+    const col = document.createElement("div");
+    col.className = "habit-day" + (key === todayKey ? " today" : "");
+    const label = document.createElement("div");
+    label.className = "habit-day-label";
+    label.textContent = letters[i];
+    col.appendChild(label);
+    const dotsWrap = document.createElement("div");
+    dotsWrap.className = "habit-day-dots";
+    for (let j = 0; j < dots; j++) {
+      const dot = document.createElement("div");
+      dot.className = "habit-wdot" + (j < filled ? " filled" : "");
+      dotsWrap.appendChild(dot);
+    }
+    col.appendChild(dotsWrap);
+    el.appendChild(col);
+  }
+}
+
+function renderHabitMonth() {
+  const el = document.getElementById("habit-month");
+  if (!el) return;
+  el.innerHTML = "";
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const days = new Date(year, month + 1, 0).getDate();
+  for (let day = 1; day <= days; day++) {
+    const d = new Date(year, month, day);
+    const done = habitCompletedCount(habitDateKey(d));
+    const target = habitDotCount(d.getDay());
+    const dot = document.createElement("div");
+    let cls = "habit-mdot";
+    if (done > 0) cls += done >= target ? " full" : " half";
+    if (day === today.getDate()) cls += " today";
+    dot.className = cls;
+    el.appendChild(dot);
+  }
+}
+
+function renderHabitChecks() {
+  const el = document.getElementById("habit-checks");
+  if (!el) return;
+  el.innerHTML = "";
+  const todayKey = habitDateKey(new Date());
+  const state = habitDayState(todayKey);
+  for (let i = 0; i < HABIT_COUNT; i++) {
+    const box = document.createElement("div");
+    box.className = "habit-check" + (state[i] ? " checked" : "");
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "habit-check-toggle";
+    toggle.setAttribute("aria-pressed", String(Boolean(state[i])));
+    toggle.innerHTML =
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    toggle.addEventListener("click", () => {
+      const cur = habitDayState(todayKey);
+      cur[i] = !cur[i];
+      habitData.log[todayKey] = cur;
+      saveHabits();
+      renderHabitTracker(); // fills a dot on today in the weekly calendar
+    });
+
+    const label = document.createElement("div");
+    label.className = "habit-check-label";
+    label.contentEditable = "true";
+    label.spellcheck = false;
+    label.textContent = habitData.labels[i] || "";
+    label.addEventListener("blur", () => {
+      habitData.labels[i] = label.textContent.trim() || habitData.labels[i];
+      saveHabits();
+    });
+    label.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        label.blur();
+      }
+    });
+
+    box.appendChild(toggle);
+    box.appendChild(label);
+    el.appendChild(box);
+  }
+}
+
+function renderHabitTracker() {
+  renderHabitWeek();
+  renderHabitMonth();
+  renderHabitChecks();
+}
+
 // A generic pointer-drag helper: onMove(dx, dy) each frame, onEnd() at the end.
 function pageDrag(startEvent, onMove, onEnd) {
   startEvent.preventDefault();
@@ -4873,6 +5037,7 @@ function buildDesktop() {
   refreshPark();
   renderDexGrid();
   renderCalTeamExtras();
+  renderHabitTracker();
 
   // restore page-edit mode if it was left on
   if (settings.pageEdit) setPageEdit(true);
