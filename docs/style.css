@@ -1476,7 +1476,7 @@ h1 {
 .dex-tab .shiny-star {
   width: 15px;
   height: 15px;
-  color: #ffffff;
+  color: var(--text);
   margin: 0;
 }
 
@@ -2097,16 +2097,29 @@ body.theme-dark .dex-cell.undiscovered img {
     background: rgba(0, 0, 0, 0.42);
     cursor: pointer;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.15s;
   }
-  .dt-embed:hover .dt-embed-edit {
+  /* only offer the spotify-link button while in page edit mode */
+  .dt-root.dt-editing .dt-embed-edit {
     opacity: 1;
+    pointer-events: auto;
   }
 
   /* ---- poképark box (relocated #park-mine: keep only the hopping floor) ---- */
   .dt-park-box {
     padding: 0;
     overflow: hidden;
+    /* just an outline, no fill */
+    background: transparent;
+    min-height: 190px;
+    /* let the floor stretch to the box so hoppers always fit the resized box */
+    display: flex;
+  }
+  .dt-park-box > #park-mine {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
   }
   .dt-park-box .park-my-title,
   .dt-park-box .park-my-icons,
@@ -2114,9 +2127,10 @@ body.theme-dark .dex-cell.undiscovered img {
     display: none;
   }
   .dt-park-box .park-floor {
+    flex: 1 1 auto;
     margin: 0;
-    height: 100%;
-    min-height: 190px;
+    height: auto;
+    min-height: 0;
     border-radius: 18px;
     background: transparent;
   }
