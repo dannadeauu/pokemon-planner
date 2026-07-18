@@ -1619,8 +1619,8 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-dashboard,
   .dt-section {
     max-width: var(--dt-content-max, 1340px);
-    margin-left: auto;
-    margin-right: auto;
+    margin-left: var(--dt-ml, auto);
+    margin-right: var(--dt-mr, auto);
     padding-left: 28px;
     padding-right: 28px;
   }

@@ -3705,9 +3705,99 @@ function itemMaxWidth(el) {
   let cellLeft = grid.getBoundingClientRect().left + padL;
   for (let i = 0; i < idx; i++) cellLeft += tracks[i] + gap;
   const cellRight = cellLeft + tracks[idx];
-  const isLast = idx === tracks.length - 1;
-  const rightBoundary = isLast ? document.documentElement.clientWidth : cellRight;
-  return Math.max(80, rightBoundary - cellLeft);
+  // stay within the column; the last column's right edge is the content edge
+  // (i.e. the right margin border), so items never spill into the margin
+  return Math.max(80, cellRight - cellLeft);
+}
+
+// ---- column / margin geometry (page edit mode) ----
+const MIN_COL = 120; // minimum width for any resizable column
+const DASH_MINS_MARGIN = 0; // margins may shrink to the screen edge
+
+// Scale `sizes` to sum to `total`, then enforce per-index minimums, pulling the
+// difference from the segments that still have room above their minimum.
+function fitSizes(sizes, mins, total) {
+  const cur = sizes.reduce((a, b) => a + b, 0);
+  let s = sizes.map((v) => (cur > 0 ? (v * total) / cur : total / sizes.length));
+  s = s.map((v, i) => Math.max(v, mins[i]));
+  let excess = s.reduce((a, b) => a + b, 0) - total;
+  if (excess > 0) {
+    const pool = s.map((v, i) => Math.max(0, v - mins[i]));
+    const poolSum = pool.reduce((a, b) => a + b, 0);
+    if (poolSum > 0) s = s.map((v, i) => v - (excess * pool[i]) / poolSum);
+  }
+  return s;
+}
+
+// Move the boundary between segment `index` and `index+1` by `delta` px, taking
+// space from the neighbours in cascade (respecting mins) so the total is fixed
+// and nothing is ever pushed off-screen.
+function moveBoundary(sizes, mins, index, delta) {
+  const s = sizes.slice();
+  if (delta > 0) {
+    let need = delta;
+    for (let j = index + 1; j < s.length && need > 0.01; j++) {
+      const take = Math.min(s[j] - mins[j], need);
+      s[j] -= take;
+      need -= take;
+    }
+    s[index] += delta - need;
+  } else if (delta < 0) {
+    let need = -delta;
+    for (let j = index; j >= 0 && need > 0.01; j--) {
+      const take = Math.min(s[j] - mins[j], need);
+      s[j] -= take;
+      need -= take;
+    }
+    s[index + 1] += -delta - need;
+  }
+  return s;
+}
+
+// The dashboard's flexible segments, in order: [leftMargin, col1..colN, rightMargin].
+function dashMins(nCols) {
+  return [DASH_MINS_MARGIN, ...Array(nCols).fill(MIN_COL), DASH_MINS_MARGIN];
+}
+
+// Total width shared by the dashboard's margins + columns (viewport minus the
+// fixed content padding and column gaps).
+function dashFixedTotal(dash) {
+  const cs = getComputedStyle(dash);
+  const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+  const gap = parseFloat(cs.columnGap) || 0;
+  const nCols = cssColsToPx(dash).length;
+  return document.documentElement.clientWidth - pad - gap * (nCols - 1);
+}
+
+// Read the dashboard's current [leftMargin, ...cols, rightMargin] from layout.
+function currentDashSizes(dash) {
+  const r = dash.getBoundingClientRect();
+  const cols = cssColsToPx(dash);
+  const ml = Math.max(0, r.left);
+  const mr = Math.max(0, document.documentElement.clientWidth - r.right);
+  return [ml, ...cols, mr];
+}
+
+// Clamp/scale stored sizes to the current viewport so nothing overflows.
+function fitDashSizes(sizes) {
+  const dash = document.querySelector(".dt-dashboard");
+  if (!dash) return sizes;
+  const nCols = sizes.length - 2;
+  return fitSizes(sizes, dashMins(nCols), dashFixedTotal(dash));
+}
+
+// Apply a [leftMargin, ...cols, rightMargin] array to the CSS.
+function applyDashSizes(sizes) {
+  const root = document.documentElement;
+  const dash = document.querySelector(".dt-dashboard");
+  if (!dash) return;
+  const ml = Math.round(sizes[0]);
+  const mr = Math.round(sizes[sizes.length - 1]);
+  const cols = sizes.slice(1, -1).map((c) => Math.round(c));
+  root.style.setProperty("--dt-ml", ml + "px");
+  root.style.setProperty("--dt-mr", mr + "px");
+  root.style.setProperty("--dt-content-max", "none");
+  dash.style.gridTemplateColumns = cols.map((c) => c + "px").join(" ");
 }
 
 // Apply the saved sizes + colors to the desktop layout (idempotent).
@@ -3726,13 +3816,36 @@ function applyPageLayout() {
   setVar("--dt-btn-primary", colors.primary);
   setVar("--dt-btn-secondary", colors.secondary);
 
-  if (pl.contentMax) root.style.setProperty("--dt-content-max", pl.contentMax + "px");
-  else root.style.removeProperty("--dt-content-max");
-
   const dash = document.querySelector(".dt-dashboard");
-  if (dash) dash.style.gridTemplateColumns = pl.dashCols || "";
+  // New model: independent left/right margins act as the outer column borders,
+  // with the columns filling the space between them. Falls back to the legacy
+  // centered max-width model for layouts saved before margins existed.
+  if (dash && pl.marginLeft != null && pl.marginRight != null && pl.dashCols) {
+    const cols = pl.dashCols.split(" ").map(parseFloat).filter((n) => !isNaN(n));
+    let sizes = [pl.marginLeft, ...cols, pl.marginRight];
+    sizes = fitDashSizes(sizes);
+    applyDashSizes(sizes);
+  } else {
+    root.style.removeProperty("--dt-ml");
+    root.style.removeProperty("--dt-mr");
+    if (pl.contentMax) root.style.setProperty("--dt-content-max", pl.contentMax + "px");
+    else root.style.removeProperty("--dt-content-max");
+    if (dash) dash.style.gridTemplateColumns = pl.dashCols || "";
+  }
+
   const calRow = document.querySelector(".dt-cal-row");
-  if (calRow) calRow.style.gridTemplateColumns = pl.calCols || "";
+  if (calRow) {
+    if (pl.calCols) {
+      // re-fit the calendar row's columns to the (margin-adjusted) section width
+      const cc = pl.calCols.split(" ").map(parseFloat).filter((n) => !isNaN(n));
+      const gap = gridGap(calRow);
+      const avail = calRow.getBoundingClientRect().width - gap * (cc.length - 1);
+      const fitted = fitSizes(cc, cc.map(() => MIN_COL), avail);
+      calRow.style.gridTemplateColumns = fitted.map((c) => Math.round(c) + "px").join(" ");
+    } else {
+      calRow.style.gridTemplateColumns = "";
+    }
+  }
 
   const items = pl.items || {};
   for (const item of PAGE_ITEMS) {
@@ -3806,7 +3919,9 @@ function gridGap(gridEl) {
   return parseFloat(getComputedStyle(gridEl).columnGap) || 0;
 }
 
-// Build resize handles for a grid's columns (adjacent-pair resize).
+// Build resize handles for a plain grid's columns (e.g. the calendar row).
+// Adjacent columns cascade with a 120px minimum; total width is preserved so
+// nothing overflows the row.
 function buildColHandles(gridEl, storeKey) {
   const gap = gridGap(gridEl);
   const place = () => {
@@ -3824,13 +3939,12 @@ function buildColHandles(gridEl, storeKey) {
     handle.className = "dt-col-handle";
     handle.addEventListener("pointerdown", (e) => {
       const cols = cssColsToPx(gridEl);
+      const mins = cols.map(() => MIN_COL);
       pageDrag(
         e,
         (dx) => {
-          const next = cols.slice();
-          next[i] = Math.max(40, cols[i] + dx);
-          next[i + 1] = Math.max(40, cols[i + 1] - dx);
-          gridEl.style.gridTemplateColumns = next.map((c) => c + "px").join(" ");
+          const next = moveBoundary(cols, mins, i, dx);
+          gridEl.style.gridTemplateColumns = next.map((c) => Math.round(c) + "px").join(" ");
           place();
         },
         () => {
@@ -3845,12 +3959,40 @@ function buildColHandles(gridEl, storeKey) {
   place();
 }
 
-// Margin (content width) handles pinned to the content's left/right edges.
+// Unified dashboard handles: the 3 column borders plus the left/right margin
+// borders all operate on one [leftMargin, ...cols, rightMargin] array. Dragging
+// any border cascades into its neighbours (min 120px per column, margins clamp
+// at the screen edge) with the total pinned to the viewport, so nothing can be
+// pushed off-screen.
 let marginHandles = [];
-function buildMarginHandles() {
+function buildDashboardHandles() {
   const dash = document.querySelector(".dt-dashboard");
   if (!dash) return;
-  const place = () => {
+  const nCols = cssColsToPx(dash).length;
+  const mins = dashMins(nCols);
+
+  const save = () => {
+    const sizes = currentDashSizes(dash);
+    pageLayout().marginLeft = Math.round(sizes[0]);
+    pageLayout().marginRight = Math.round(sizes[sizes.length - 1]);
+    pageLayout().dashCols = dash.style.gridTemplateColumns;
+    fixItemOverlaps();
+    touchUiPrefs();
+  };
+
+  const placeCols = () => {
+    const cols = cssColsToPx(dash);
+    const cs = getComputedStyle(dash);
+    const gap = parseFloat(cs.columnGap) || 0;
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const handles = dash.querySelectorAll(".dt-col-handle");
+    let x = padL;
+    for (let i = 0; i < cols.length - 1; i++) {
+      x += cols[i] + gap;
+      if (handles[i]) handles[i].style.left = x - gap / 2 + "px";
+    }
+  };
+  const placeMargins = () => {
     const r = dash.getBoundingClientRect();
     if (marginHandles[0]) {
       marginHandles[0].style.left = r.left - 8 + "px";
@@ -3863,34 +4005,43 @@ function buildMarginHandles() {
       marginHandles[1].style.height = Math.min(r.height, 400) + "px";
     }
   };
-  [-1, 1].forEach((sideSign, idx) => {
+  const placeAll = () => {
+    placeCols();
+    placeMargins();
+  };
+
+  // boundaryIndex: 0 = left margin | col1, 1..nCols-1 = col borders,
+  // nCols = colN | right margin.
+  const startDrag = (e, boundaryIndex) => {
+    const start = fitDashSizes(currentDashSizes(dash));
+    pageDrag(
+      e,
+      (dx) => {
+        applyDashSizes(moveBoundary(start, mins, boundaryIndex, dx));
+        placeAll();
+      },
+      save
+    );
+  };
+
+  // internal column borders (inside the dashboard)
+  for (let i = 0; i < nCols - 1; i++) {
+    const handle = document.createElement("div");
+    handle.className = "dt-col-handle";
+    handle.addEventListener("pointerdown", (e) => startDrag(e, i + 1));
+    dash.appendChild(handle);
+  }
+  // left + right margin borders (on the body so they can sit in the margin)
+  [0, nCols].forEach((boundaryIndex) => {
     const h = document.createElement("div");
     h.className = "dt-margin-handle";
-    h.addEventListener("pointerdown", (e) => {
-      const startMax = dash.getBoundingClientRect().width;
-      pageDrag(
-        e,
-        (dx) => {
-          // dragging either edge outward widens content (shrinks margins)
-          const delta = sideSign === 1 ? dx : -dx;
-          const w = Math.max(400, Math.min(window.innerWidth, startMax + delta * 2));
-          document.documentElement.style.setProperty("--dt-content-max", w + "px");
-          place();
-        },
-        () => {
-          const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dt-content-max"));
-          if (w) {
-            pageLayout().contentMax = Math.round(w);
-            touchUiPrefs();
-          }
-        }
-      );
-    });
+    h.addEventListener("pointerdown", (e) => startDrag(e, boundaryIndex));
     document.body.appendChild(h);
     marginHandles.push(h);
   });
-  place();
-  window.addEventListener("resize", place);
+
+  placeAll();
+  window.addEventListener("resize", placeAll);
 }
 
 // Corner resize handle on each resizable box.
@@ -3947,11 +4098,9 @@ function setPageEdit(on) {
   if (colors) colors.classList.toggle("hidden", !on);
   teardownPageHandles();
   if (on) {
-    const dash = document.querySelector(".dt-dashboard");
-    if (dash) buildColHandles(dash, "dashCols");
+    buildDashboardHandles();
     const calRow = document.querySelector(".dt-cal-row");
     if (calRow) buildColHandles(calRow, "calCols");
-    buildMarginHandles();
     buildItemHandles();
     syncPageEditColorInputs();
   }
