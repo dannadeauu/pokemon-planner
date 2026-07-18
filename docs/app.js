@@ -308,7 +308,8 @@ const shinyFxEl = document.getElementById("shiny-fx");
 const settingsFabEl = document.getElementById("settings-fab");
 const settingsOverlayEl = document.getElementById("settings-overlay");
 const settingsCloseEl = document.getElementById("settings-close");
-const companionSelectEl = document.getElementById("companion-select");
+const companionSearchEl = document.getElementById("companion-search");
+const companionMenuEl = document.getElementById("companion-menu");
 
 const COMPANIONS = [
   { value: "", label: "(none)" },
@@ -481,14 +482,50 @@ function applyColors() {
   document.getElementById("color-done").value = settings.colors.done;
 }
 
-function populateCompanionSelect() {
-  companionSelectEl.innerHTML = "";
-  for (const c of COMPANIONS) {
-    const option = document.createElement("option");
-    option.value = c.value;
-    option.textContent = c.label;
-    if (c.value === settings.companion) option.selected = true;
-    companionSelectEl.appendChild(option);
+function companionDisplayName(value) {
+  return value ? value.replace(/-/g, " ") : "";
+}
+
+// Keep the search box showing the current companion (unless the user is typing).
+function updateCompanionSearch() {
+  if (companionSearchEl && document.activeElement !== companionSearchEl) {
+    companionSearchEl.value = companionDisplayName(settings.companion);
+  }
+}
+
+// Pokedex-style grid of companions (icon + name); the current one is highlighted.
+function renderCompanionMenu(filter) {
+  if (!companionMenuEl) return;
+  const q = (filter || "").trim().toLowerCase();
+  companionMenuEl.innerHTML = "";
+  const list = COMPANIONS.filter(
+    (c) => !q || c.label.toLowerCase().includes(q) || c.value.toLowerCase().includes(q)
+  );
+  for (const c of list) {
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "companion-cell" + (c.value === settings.companion ? " active" : "");
+    if (c.value) {
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.src = companionSpriteUrl(c.value, teamFullyEvolved);
+      img.alt = c.value;
+      cell.appendChild(img);
+    }
+    const name = document.createElement("span");
+    name.textContent = c.value ? companionDisplayName(c.value) : "none";
+    cell.appendChild(name);
+    cell.addEventListener("click", () => {
+      settings.companion = c.value;
+      saveSettings(settings);
+      applyCompanion();
+      applyMatchCompanion();
+      touchPrefs();
+      if (companionSearchEl) companionSearchEl.value = companionDisplayName(c.value);
+      companionMenuEl.classList.add("hidden");
+      renderCompanionMenu("");
+    });
+    companionMenuEl.appendChild(cell);
   }
 }
 
@@ -740,7 +777,8 @@ function initSettings() {
   applyTheme();
   applyColors();
   applyFont();
-  populateCompanionSelect();
+  updateCompanionSearch();
+  renderCompanionMenu("");
   applyCompanion();
   updateMatchCompanionButtons();
   applyMatchCompanion();
@@ -812,13 +850,23 @@ function initSettings() {
     });
   }
 
-  companionSelectEl.addEventListener("change", () => {
-    settings.companion = companionSelectEl.value;
-    saveSettings(settings);
-    applyCompanion();
-    applyMatchCompanion();
-    touchPrefs();
-  });
+  if (companionSearchEl && companionMenuEl) {
+    companionSearchEl.addEventListener("focus", () => {
+      companionSearchEl.select();
+      renderCompanionMenu(""); // show all when opening
+      companionMenuEl.classList.remove("hidden");
+    });
+    companionSearchEl.addEventListener("input", () => {
+      renderCompanionMenu(companionSearchEl.value);
+      companionMenuEl.classList.remove("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!companionMenuEl.classList.contains("hidden") && !e.target.closest(".companion-picker")) {
+        companionMenuEl.classList.add("hidden");
+        updateCompanionSearch(); // revert text to the current selection
+      }
+    });
+  }
 
   window.addEventListener("resize", sizeCompanionImage);
 }
@@ -3137,7 +3185,8 @@ async function pullPrefs() {
       prefsUpdatedAt = remote.updated_at;
       localStorage.setItem(PREFS_TS_KEY, prefsUpdatedAt);
       if (changed) {
-        populateCompanionSelect();
+        updateCompanionSearch();
+        renderCompanionMenu("");
         applyCompanion();
         applyMatchCompanion();
         const msgInput = document.querySelector(".park-msg-input");
