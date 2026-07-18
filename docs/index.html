@@ -196,10 +196,23 @@
       </div>
 
       <div class="settings-section">
-        <span class="settings-label">font</span>
+        <span class="settings-label" id="font-label">font</span>
         <div class="font-picker">
           <button class="font-btn" id="font-btn" type="button" aria-haspopup="true"></button>
           <div class="font-menu hidden" id="font-menu"></div>
+        </div>
+
+        <div class="friends-toggle-row font-mobile-row hidden" id="font-mobile-row">
+          <span class="friends-toggle-label">different font on mobile</span>
+          <button class="friends-toggle" id="font-mobile-toggle" type="button" role="switch" aria-checked="false"></button>
+        </div>
+
+        <div class="font-mobile-section hidden" id="font-mobile-section">
+          <span class="settings-label">mobile font</span>
+          <div class="font-picker">
+            <button class="font-btn" id="font-mobile-btn" type="button" aria-haspopup="true"></button>
+            <div class="font-menu hidden" id="font-mobile-menu"></div>
+          </div>
         </div>
       </div>
     </div>

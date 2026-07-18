@@ -396,6 +396,8 @@ const DEFAULT_SETTINGS = {
   matchCompanion: false,
   matchCompanionDone: false,
   font: "Baloo 2",
+  fontMobile: "Baloo 2",
+  differentFontMobile: false,
 };
 
 // Selectable app fonts. `google` is the fonts.googleapis.com family param (null
@@ -413,10 +415,18 @@ function appFontByLabel(label) {
   return APP_FONTS.find((f) => f.label === label) || APP_FONTS[0];
 }
 
+// Which font this device shows: the mobile-specific one only when signed in,
+// the toggle is on, and this is a mobile-width device; otherwise the main font.
+function currentFontLabel() {
+  const isMobile = !(window.matchMedia && window.matchMedia("(min-width: 1024px)").matches);
+  if (isMobile && settings.differentFontMobile && authSession) return settings.fontMobile;
+  return settings.font;
+}
+
 // Apply the chosen font app-wide: load it (if it needs downloading) and set the
 // document font so everything using `inherit` picks it up.
 function applyFont() {
-  const font = appFontByLabel(settings.font);
+  const font = appFontByLabel(currentFontLabel());
   let link = document.getElementById("app-font-link");
   if (font.google) {
     const href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
@@ -644,22 +654,23 @@ function applyMatchCompanion() {
   }
 }
 
-// Font picker: a button that opens a menu of fonts, each shown in its own face.
-function updateFontButton() {
-  const btn = document.getElementById("font-btn");
+// Font pickers: a button that opens a menu of fonts, each shown in its own
+// face. Generalized so the main (desktop/shared) and mobile pickers share it.
+function updateFontButton(btnId, label) {
+  const btn = document.getElementById(btnId);
   if (!btn) return;
-  const font = appFontByLabel(settings.font);
+  const font = appFontByLabel(label);
   btn.textContent = font.label;
   btn.style.fontFamily = font.stack;
 }
-function buildFontMenu() {
-  const menu = document.getElementById("font-menu");
+function buildFontMenu(menuId, currentLabel, onSelect) {
+  const menu = document.getElementById(menuId);
   if (!menu) return;
   menu.innerHTML = "";
   for (const f of APP_FONTS) {
     const opt = document.createElement("button");
     opt.type = "button";
-    opt.className = "font-option" + (f.label === settings.font ? " active" : "");
+    opt.className = "font-option" + (f.label === currentLabel ? " active" : "");
     opt.textContent = f.label;
     opt.style.fontFamily = f.stack;
     if (f.google && !document.querySelector(`link[data-font-preload="${f.label}"]`)) {
@@ -671,16 +682,58 @@ function buildFontMenu() {
       document.head.appendChild(pre);
     }
     opt.addEventListener("click", () => {
-      settings.font = f.label;
-      saveSettings(settings);
-      applyFont();
-      updateFontButton();
-      buildFontMenu();
+      onSelect(f.label);
       menu.classList.add("hidden");
-      touchPrefs();
     });
     menu.appendChild(opt);
   }
+}
+function refreshFontPicker(p) {
+  updateFontButton(p.btnId, p.getVal());
+  buildFontMenu(p.menuId, p.getVal(), (label) => {
+    p.setVal(label);
+    saveSettings(settings);
+    applyFont();
+    touchPrefs();
+    refreshFontPicker(p);
+  });
+}
+function wireFontPicker(p) {
+  const btn = document.getElementById(p.btnId);
+  const menu = document.getElementById(p.menuId);
+  if (!btn || !menu) return;
+  refreshFontPicker(p);
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.classList.contains("hidden") && !menu.parentElement.contains(e.target)) {
+      menu.classList.add("hidden");
+    }
+  });
+}
+const MAIN_FONT_PICKER = { btnId: "font-btn", menuId: "font-menu", getVal: () => settings.font, setVal: (v) => { settings.font = v; } };
+const MOBILE_FONT_PICKER = { btnId: "font-mobile-btn", menuId: "font-mobile-menu", getVal: () => settings.fontMobile, setVal: (v) => { settings.fontMobile = v; } };
+
+// The "different font on mobile" toggle + mobile picker only make sense for a
+// signed-in account (they sync a separate font to phones), so they only show
+// when signed in.
+function updateFontMobileUI() {
+  const row = document.getElementById("font-mobile-row");
+  if (!row) return;
+  const signedIn = Boolean(authSession);
+  const on = signedIn && settings.differentFontMobile;
+  row.classList.toggle("hidden", !signedIn);
+  const toggle = document.getElementById("font-mobile-toggle");
+  if (toggle) {
+    toggle.classList.toggle("on", on);
+    toggle.setAttribute("aria-checked", String(on));
+  }
+  const section = document.getElementById("font-mobile-section");
+  if (section) section.classList.toggle("hidden", !on);
+  const label = document.getElementById("font-label");
+  if (label) label.textContent = on ? "desktop font" : "font";
 }
 
 function initSettings() {
@@ -692,19 +745,18 @@ function initSettings() {
   updateMatchCompanionButtons();
   applyMatchCompanion();
 
-  const fontBtn = document.getElementById("font-btn");
-  const fontMenu = document.getElementById("font-menu");
-  if (fontBtn && fontMenu) {
-    updateFontButton();
-    buildFontMenu();
-    fontBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      fontMenu.classList.toggle("hidden");
-    });
-    document.addEventListener("click", (e) => {
-      if (!fontMenu.classList.contains("hidden") && !e.target.closest(".font-picker")) {
-        fontMenu.classList.add("hidden");
-      }
+  wireFontPicker(MAIN_FONT_PICKER);
+  wireFontPicker(MOBILE_FONT_PICKER);
+  updateFontMobileUI();
+  const fontMobileToggle = document.getElementById("font-mobile-toggle");
+  if (fontMobileToggle) {
+    fontMobileToggle.addEventListener("click", () => {
+      if (!authSession) return;
+      settings.differentFontMobile = !settings.differentFontMobile;
+      saveSettings(settings);
+      updateFontMobileUI();
+      applyFont();
+      touchPrefs();
     });
   }
 
@@ -726,7 +778,10 @@ function initSettings() {
     settingsOverlayEl.classList.add("hidden");
     resetViewportScroll();
   };
-  settingsFabEl.addEventListener("click", () => settingsOverlayEl.classList.remove("hidden"));
+  settingsFabEl.addEventListener("click", () => {
+    updateFontMobileUI(); // reflect current sign-in state
+    settingsOverlayEl.classList.remove("hidden");
+  });
   settingsCloseEl.addEventListener("click", closeSettings);
   settingsOverlayEl.addEventListener("click", (e) => {
     if (e.target === settingsOverlayEl) closeSettings();
@@ -3020,7 +3075,13 @@ async function pullDex() {
 let prefsSyncTimer = null;
 
 function prefsSyncPayload() {
-  return { companion: settings.companion, parkMessage, font: settings.font };
+  return {
+    companion: settings.companion,
+    parkMessage,
+    font: settings.font,
+    fontMobile: settings.fontMobile,
+    differentFontMobile: settings.differentFontMobile,
+  };
 }
 
 function schedulePrefsSync() {
@@ -3058,10 +3119,18 @@ async function pullPrefs() {
       const companion = typeof data.companion === "string" ? data.companion : settings.companion;
       const message = typeof data.parkMessage === "string" ? data.parkMessage : parkMessage;
       const font = typeof data.font === "string" ? data.font : settings.font;
-      const fontChanged = font !== settings.font;
+      const fontMobile = typeof data.fontMobile === "string" ? data.fontMobile : settings.fontMobile;
+      const diffFontMobile =
+        typeof data.differentFontMobile === "boolean" ? data.differentFontMobile : settings.differentFontMobile;
+      const fontChanged =
+        font !== settings.font ||
+        fontMobile !== settings.fontMobile ||
+        diffFontMobile !== settings.differentFontMobile;
       const changed = companion !== settings.companion || message !== parkMessage || fontChanged;
       settings.companion = companion;
       settings.font = font;
+      settings.fontMobile = fontMobile;
+      settings.differentFontMobile = diffFontMobile;
       saveSettings(settings);
       parkMessage = message;
       localStorage.setItem(PARK_MSG_KEY, parkMessage);
@@ -3076,8 +3145,9 @@ async function pullPrefs() {
       }
       if (fontChanged) {
         applyFont();
-        updateFontButton();
-        buildFontMenu();
+        refreshFontPicker(MAIN_FONT_PICKER);
+        refreshFontPicker(MOBILE_FONT_PICKER);
+        updateFontMobileUI();
       }
     } else {
       schedulePrefsSync(); // this device is newer: push it up
@@ -3124,6 +3194,10 @@ async function handleAuthRedirect() {
   await pullPrefs();
   await pullUi();
   await pullCal();
+  // now signed in: the mobile-font toggle becomes available and may change
+  // which font this device shows
+  updateFontMobileUI();
+  applyFont();
 }
 
 async function ensureFreshAuth() {
@@ -3160,6 +3234,9 @@ async function signOutGoogle() {
   // Keep the tasks on this device, but forget the sync state so signing back
   // in (or a different account) re-evaluates against the cloud cleanly.
   lastSyncedTasks = null;
+  // the mobile-font option is signed-in-only; hide it and revert to the shared font
+  updateFontMobileUI();
+  applyFont();
   renderAccountView();
   if (token) {
     try {

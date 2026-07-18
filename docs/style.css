@@ -2333,3 +2333,15 @@ h1 {
   background: var(--input-bg);
   font-weight: 700;
 }
+
+/* "different font on mobile" toggle + the mobile font picker (signed-in only) */
+.font-mobile-row {
+  margin-top: 16px;
+}
+.font-mobile-section {
+  margin-top: 14px;
+}
+.font-mobile-row.hidden,
+.font-mobile-section.hidden {
+  display: none;
+}
