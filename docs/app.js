@@ -3713,6 +3713,31 @@ function applyPageLayout() {
       el.style.flex = "";
     }
   }
+  fixItemOverlaps();
+}
+
+// Safety net: stacked boxes in a column must sit on their own lines. If a
+// resized box ever ends up overlapping the one below it, push the lower box
+// down by the overlap so nothing sits on top of anything else. Runs on every
+// layout apply (i.e. on refresh) and after a resize ends.
+function fixItemOverlaps() {
+  if (!document.getElementById("dt-root")) return;
+  const cols = document.querySelectorAll(".dt-tasks-col, .dt-mid-col, .dt-right-col");
+  cols.forEach((col) => {
+    const kids = [...col.children];
+    // clear previous corrections first so we measure the natural layout
+    kids.forEach((el) => (el.style.marginTop = ""));
+    for (let i = 1; i < kids.length; i++) {
+      const prev = kids[i - 1].getBoundingClientRect();
+      const el = kids[i];
+      const cur = el.getBoundingClientRect();
+      const overlap = prev.bottom - cur.top;
+      if (overlap > 1) {
+        const base = parseFloat(getComputedStyle(el).marginTop) || 0;
+        el.style.marginTop = base + Math.ceil(overlap) + "px";
+      }
+    }
+  });
 }
 
 // A generic pointer-drag helper: onMove(dx, dy) each frame, onEnd() at the end.
@@ -3768,6 +3793,7 @@ function buildColHandles(gridEl, storeKey) {
         },
         () => {
           pageLayout()[storeKey] = gridEl.style.gridTemplateColumns;
+          fixItemOverlaps();
           touchUiPrefs();
         }
       );
@@ -3860,6 +3886,7 @@ function buildItemHandles() {
             w: Math.round(el.getBoundingClientRect().width),
             h: Math.round(el.getBoundingClientRect().height),
           };
+          fixItemOverlaps();
           touchUiPrefs();
         }
       );
