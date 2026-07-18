@@ -324,6 +324,27 @@ const COMPANIONS = [
   { value: "mimikyu", label: "mimikyu" },
   { value: "cosmog", label: "cosmog" },
   { value: "bidoof", label: "bidoof" },
+  { value: "applin", label: "applin" },
+  { value: "budew", label: "budew" },
+  { value: "cinccino", label: "cinccino" },
+  { value: "comfey", label: "comfey" },
+  { value: "dracozolt", label: "dracozolt" },
+  { value: "dragonite", label: "dragonite" },
+  { value: "eldegoss", label: "eldegoss" },
+  { value: "emolga", label: "emolga" },
+  { value: "flabebe", label: "flabébé" },
+  { value: "fletchling", label: "fletchling" },
+  { value: "sentret", label: "sentret" },
+  { value: "furret", label: "furret" },
+  { value: "gengar", label: "gengar" },
+  { value: "lapras", label: "lapras" },
+  { value: "lurantis", label: "lurantis" },
+  { value: "mismagius", label: "mismagius" },
+  { value: "porygon2", label: "porygon2" },
+  { value: "reuniclus", label: "reuniclus" },
+  { value: "shinx", label: "shinx" },
+  { value: "wooper", label: "wooper" },
+  { value: "zorua", label: "zorua" },
   // Every stage-one starter available in gen5ani (Chespin and the gen9
   // starters aren't in that sprite set, so they're left out).
   { value: "bulbasaur", label: "bulbasaur" },
@@ -362,7 +383,13 @@ const COMPANION_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/gen5ani"
 const COMPANION_SPRITE_SHINY_BASE = "https://play.pokemonshowdown.com/sprites/gen5ani-shiny";
 // These sit on a much bigger canvas than the other companions, so they ship
 // pre-cropped as static assets to match everyone else's sizing.
-const COMPANION_CROP_OVERRIDES = new Set(["grookey", "scorbunny", "sobble", "froakie"]);
+const COMPANION_CROP_OVERRIDES = new Set([
+  "grookey",
+  "scorbunny",
+  "sobble",
+  "froakie",
+  "fletchling",
+]);
 
 function companionSpriteUrl(name, shiny) {
   if (COMPANION_CROP_OVERRIDES.has(name)) {
