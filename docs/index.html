@@ -29,7 +29,15 @@
       <input type="file" id="dt-banner-input" accept="image/*" hidden />
     </div>
 
-    <h1 class="dt-title" id="dt-title" contenteditable="true" spellcheck="false">pokeplanner</h1>
+    <div class="dt-title-row">
+      <h1 class="dt-title" id="dt-title" contenteditable="true" spellcheck="false">pokeplanner</h1>
+      <button class="dt-gear" id="dt-gear-btn" type="button" aria-label="settings">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.2"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
 
     <div class="dt-dashboard">
       <div class="dt-team-col" id="dt-team-slot"></div>
@@ -43,11 +51,6 @@
         <div class="dt-clock">
           <div class="dt-clock-box"><span class="dt-ampm" id="dt-clock-ampm">AM</span><span id="dt-clock-h">--</span></div>
           <div class="dt-clock-box"><span id="dt-clock-m">--</span></div>
-        </div>
-        <div class="dt-nav-btns">
-          <button class="dt-nav-btn" id="dt-account-btn" type="button">account</button>
-          <button class="dt-nav-btn" id="dt-friends-btn" type="button">friends</button>
-          <button class="dt-nav-btn" id="dt-settings-btn" type="button">settings</button>
         </div>
         <h2 class="dt-h2">habit tracker</h2>
         <div class="dt-box dt-habit-box"></div>
@@ -149,13 +152,18 @@
     </div>
   </div>
 
-  <div class="settings-overlay hidden" id="settings-overlay">
+  <div class="settings-overlay hub-overlay hidden" id="hub-overlay">
     <div class="settings-panel">
-      <div class="settings-header">
-        <h2>settings</h2>
-        <button class="settings-close" id="settings-close">✕</button>
+      <div class="settings-header hub-header">
+        <div class="hub-tabs">
+          <button class="hub-tab active" data-hubtab="settings" type="button">settings</button>
+          <button class="hub-tab" data-hubtab="account" type="button">account</button>
+          <button class="hub-tab" data-hubtab="friends" type="button">friends</button>
+        </div>
+        <button class="settings-close" id="hub-close">✕</button>
       </div>
 
+      <div class="hub-pane" id="hub-pane-settings">
       <div class="settings-section">
         <span class="settings-label">theme</span>
         <div class="theme-toggle">
@@ -231,19 +239,9 @@
           <div class="color-row"><label for="pe-secondary">secondary buttons</label><input type="color" id="pe-secondary" /></div>
         </div>
       </div>
-    </div>
-  </div>
+      </div><!-- /hub-pane-settings -->
 
-  <div class="settings-overlay hidden" id="friends-overlay">
-    <div class="settings-panel">
-      <div class="settings-header">
-        <h2>friends</h2>
-        <div class="friends-header-btns">
-          <button class="account-btn" id="account-btn" type="button">account</button>
-          <button class="settings-close" id="friends-close">✕</button>
-        </div>
-      </div>
-
+      <div class="hub-pane hidden" id="hub-pane-friends">
       <div id="friends-home-view">
         <p class="friends-intro">enter your friend's trainer code to add friends &amp; host their pokemon in your park!</p>
 
@@ -304,10 +302,9 @@
         <button class="friends-btn" id="nickname-google-btn" type="button">sign in with google</button>
         <p class="friends-hint nickname-google-hint">to access an existing team (or to use this planner cross-device!)</p>
       </form>
+      </div><!-- /hub-pane-friends -->
 
-      <div id="friends-account-view" class="hidden">
-        <button class="account-back" id="account-back" type="button">&larr; back</button>
-
+      <div class="hub-pane hidden" id="hub-pane-account">
         <span class="settings-label">change nickname</span>
         <form class="account-nickname-form" id="account-nickname-form">
           <input type="text" id="account-nickname-input" placeholder="your nickname" maxlength="20" autocomplete="off" required />
@@ -324,7 +321,7 @@
             <button class="friends-btn account-signout" id="google-signout-btn" type="button">sign out of google</button>
           </div>
         </div>
-      </div>
+      </div><!-- /hub-pane-account -->
     </div>
   </div>
 

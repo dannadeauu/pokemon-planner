@@ -490,6 +490,39 @@ h1 {
   padding: 4px 8px;
 }
 
+/* tabbed hub: settings / account / friends */
+.hub-header {
+  gap: 12px;
+}
+.hub-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.hub-tab {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.hub-tab:hover {
+  color: var(--text);
+}
+.hub-tab.active {
+  background: var(--color-add);
+  color: #fff;
+}
+.hub-pane.hidden {
+  display: none;
+}
+
 .settings-section {
   margin-bottom: 22px;
 }
@@ -1576,7 +1609,7 @@ h1 {
     padding-bottom: 64px;
   }
 
-  .dt-title,
+  .dt-title-row,
   .dt-dashboard,
   .dt-section {
     max-width: var(--dt-content-max, 1340px);
@@ -1650,14 +1683,53 @@ h1 {
     pointer-events: none;
   }
 
-  /* ---- editable title ---- */
+  /* ---- editable title + settings gear ---- */
+  .dt-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 22px auto 26px;
+  }
   .dt-title {
     font-size: 40px;
     font-weight: 800;
-    margin: 22px auto 26px;
+    margin: 0;
     outline: none;
     line-height: 1.1;
     text-align: left;
+    min-width: 0;
+  }
+  .dt-gear {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s;
+  }
+  .dt-gear:hover {
+    color: var(--text);
+    background: var(--dt-btn-secondary, var(--team-card));
+  }
+  .dt-gear:active {
+    transform: scale(0.94);
+  }
+
+  /* the unified hub pops up centered on desktop (bottom-sheet on mobile) */
+  .hub-overlay {
+    align-items: center;
+    justify-content: center;
+  }
+  .hub-overlay .settings-panel {
+    border-radius: 24px;
+    margin: 0;
   }
   .dt-title:focus {
     box-shadow: inset 0 -3px 0 var(--color-add);
@@ -2431,6 +2503,10 @@ h1 {
   }
   .dt-resizable {
     position: relative;
+    /* never let a resized box spill out of / overlap its column — keep each
+       object on its own line, centered within the column width */
+    max-width: 100%;
+    box-sizing: border-box;
   }
   /* dashed hint around resizable items while editing */
   .dt-root.dt-editing .dt-clock,

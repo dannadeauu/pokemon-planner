@@ -306,8 +306,10 @@ const companionRowEl = document.getElementById("companion-row");
 const companionImgEl = document.getElementById("companion-img");
 const shinyFxEl = document.getElementById("shiny-fx");
 const settingsFabEl = document.getElementById("settings-fab");
-const settingsOverlayEl = document.getElementById("settings-overlay");
-const settingsCloseEl = document.getElementById("settings-close");
+// The settings / account / friends overlays are unified into one tabbed hub.
+const hubOverlayEl = document.getElementById("hub-overlay");
+const settingsOverlayEl = hubOverlayEl;
+const settingsCloseEl = document.getElementById("hub-close");
 const companionSearchEl = document.getElementById("companion-search");
 const companionMenuEl = document.getElementById("companion-menu");
 
@@ -842,18 +844,7 @@ function initSettings() {
     applyMatchCompanion();
   });
 
-  const closeSettings = () => {
-    settingsOverlayEl.classList.add("hidden");
-    resetViewportScroll();
-  };
-  settingsFabEl.addEventListener("click", () => {
-    updateFontMobileUI(); // reflect current sign-in state
-    settingsOverlayEl.classList.remove("hidden");
-  });
-  settingsCloseEl.addEventListener("click", closeSettings);
-  settingsOverlayEl.addEventListener("click", (e) => {
-    if (e.target === settingsOverlayEl) closeSettings();
-  });
+  settingsFabEl.addEventListener("click", () => openHub("settings"));
 
   for (const btn of document.querySelectorAll(".theme-btn")) {
     btn.addEventListener("click", () => {
@@ -1970,8 +1961,8 @@ const TRAINER_KEY = "todo-app-trainer";
 const FRIENDS_KEY = "todo-app-friends";
 
 const friendsFabEl = document.getElementById("friends-fab");
-const friendsOverlayEl = document.getElementById("friends-overlay");
-const friendsCloseEl = document.getElementById("friends-close");
+const friendsOverlayEl = hubOverlayEl;
+const friendsCloseEl = settingsCloseEl;
 const friendsHomeViewEl = document.getElementById("friends-home-view");
 const friendsNicknameViewEl = document.getElementById("friends-nickname-view");
 const friendsCodeEntryEl = document.getElementById("friends-code-entry");
@@ -1994,9 +1985,6 @@ const nicknameGoogleBtnEl = document.getElementById("nickname-google-btn");
 const devNoteOverlayEl = document.getElementById("dev-note-overlay");
 const devNoteContinueEl = document.getElementById("dev-note-continue");
 const devNoteCancelEl = document.getElementById("dev-note-cancel");
-const accountBtnEl = document.getElementById("account-btn");
-const friendsAccountViewEl = document.getElementById("friends-account-view");
-const accountBackEl = document.getElementById("account-back");
 const accountNicknameFormEl = document.getElementById("account-nickname-form");
 const accountNicknameInputEl = document.getElementById("account-nickname-input");
 const accountErrorEl = document.getElementById("account-error");
@@ -2774,7 +2762,6 @@ function renderFriendsTeams() {
 function renderFriendsMenu() {
   friendsHomeViewEl.classList.remove("hidden");
   friendsNicknameViewEl.classList.add("hidden");
-  friendsAccountViewEl.classList.add("hidden");
   friendCodeErrorEl.classList.add("hidden");
   nicknameErrorEl.classList.add("hidden");
   const hasTrainer = Boolean(trainer);
@@ -2792,16 +2779,50 @@ function renderFriendsMenu() {
   }
 }
 
-const closeFriends = () => {
-  friendsOverlayEl.classList.add("hidden");
-  resetViewportScroll();
+// ---- unified settings / account / friends hub ----
+const HUB_PANES = {
+  settings: "hub-pane-settings",
+  account: "hub-pane-account",
+  friends: "hub-pane-friends",
 };
 
-friendsFabEl.addEventListener("click", () => {
-  renderFriendsMenu();
-  friendsOverlayEl.classList.remove("hidden");
-  refreshFriends();
+function showHubTab(tab) {
+  for (const [name, id] of Object.entries(HUB_PANES)) {
+    const pane = document.getElementById(id);
+    if (pane) pane.classList.toggle("hidden", name !== tab);
+  }
+  document.querySelectorAll(".hub-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.hubtab === tab);
+  });
+  if (tab === "settings") {
+    updateFontMobileUI(); // reflect current sign-in state
+  } else if (tab === "friends") {
+    renderFriendsMenu();
+    refreshFriends();
+  } else if (tab === "account") {
+    renderAccountView();
+  }
+}
+
+function openHub(tab) {
+  showHubTab(tab || "settings");
+  hubOverlayEl.classList.remove("hidden");
+}
+
+function closeHub() {
+  hubOverlayEl.classList.add("hidden");
+  resetViewportScroll();
+}
+
+document.querySelectorAll(".hub-tab").forEach((btn) => {
+  btn.addEventListener("click", () => showHubTab(btn.dataset.hubtab));
 });
+settingsCloseEl.addEventListener("click", closeHub);
+hubOverlayEl.addEventListener("click", (e) => {
+  if (e.target === hubOverlayEl) closeHub();
+});
+
+friendsFabEl.addEventListener("click", () => openHub("friends"));
 
 hideTasksToggleEl.addEventListener("click", () => {
   hideTasks = !hideTasks;
@@ -2810,10 +2831,6 @@ hideTasksToggleEl.addEventListener("click", () => {
   hideTasksToggleEl.setAttribute("aria-checked", String(hideTasks));
   schedulePushTeam(); // re-push so friends' bubbles reflect the change
   renderParkMine(); // rebuild the floor with/without task text
-});
-friendsCloseEl.addEventListener("click", closeFriends);
-friendsOverlayEl.addEventListener("click", (e) => {
-  if (e.target === friendsOverlayEl) closeFriends();
 });
 
 getCodeBtnEl.addEventListener("click", () => {
@@ -3377,15 +3394,6 @@ function renderAccountView() {
   }
 }
 
-accountBtnEl.addEventListener("click", () => {
-  friendsHomeViewEl.classList.add("hidden");
-  friendsNicknameViewEl.classList.add("hidden");
-  renderAccountView();
-  friendsAccountViewEl.classList.remove("hidden");
-});
-
-accountBackEl.addEventListener("click", () => renderFriendsMenu());
-
 accountNicknameFormEl.addEventListener("submit", async (e) => {
   e.preventDefault();
   const nickname = accountNicknameInputEl.value.trim();
@@ -3801,10 +3809,17 @@ function buildItemHandles() {
     handle.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       const rect = el.getBoundingClientRect();
+      // don't let a box grow past its column so it can't overlap its neighbors
+      const parent = el.parentElement;
+      const maxW = parent
+        ? parent.clientWidth -
+          parseFloat(getComputedStyle(parent).paddingLeft) -
+          parseFloat(getComputedStyle(parent).paddingRight)
+        : Infinity;
       pageDrag(
         e,
         (dx, dy) => {
-          const w = Math.max(80, rect.width + dx);
+          const w = Math.min(maxW, Math.max(80, rect.width + dx));
           const h = Math.max(60, rect.height + dy);
           el.style.width = w + "px";
           el.style.height = h + "px";
@@ -4461,13 +4476,9 @@ function buildDesktop() {
   move(document.querySelector(".dex-card"), dexSlot);
   move(document.getElementById("dex-hint"), dexSlot);
 
-  // desktop nav buttons reuse the exact mobile overlay behaviors
-  document.getElementById("dt-settings-btn").addEventListener("click", () => settingsFabEl.click());
-  document.getElementById("dt-friends-btn").addEventListener("click", () => friendsFabEl.click());
-  document.getElementById("dt-account-btn").addEventListener("click", () => {
-    friendsFabEl.click();
-    accountBtnEl.click();
-  });
+  // the discreet gear in the title row opens the unified settings hub
+  const gearBtn = document.getElementById("dt-gear-btn");
+  if (gearBtn) gearBtn.addEventListener("click", () => openHub("settings"));
 
   // editable banner
   const bannerEl = document.getElementById("dt-banner");
