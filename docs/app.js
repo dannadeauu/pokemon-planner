@@ -313,9 +313,9 @@ const companionMenuEl = document.getElementById("companion-menu");
 
 const COMPANIONS = [
   { value: "", label: "(none)" },
-  { value: "pikachu", label: "pikachu (male)" },
-  { value: "pikachu-f", label: "pikachu (female)" },
-  { value: "pikachu-original", label: "pikachu cap" },
+  { value: "pikachu", label: "pikachu ♂" },
+  { value: "pikachu-f", label: "pikachu ♀" },
+  { value: "pikachu-original", label: "cap pikachu" },
   { value: "eevee", label: "eevee" },
   { value: "pidgey", label: "pidgey" },
   { value: "meowth", label: "meowth" },
@@ -399,6 +399,7 @@ const DEFAULT_SETTINGS = {
   font: "Baloo 2",
   fontMobile: "Baloo 2",
   differentFontMobile: false,
+  pageEdit: false,
 };
 
 // Selectable app fonts. `google` is the fonts.googleapis.com family param (null
@@ -796,6 +797,33 @@ function initSettings() {
       applyFont();
       touchPrefs();
     });
+  }
+
+  // page edit mode toggle + recolor pickers (desktop only)
+  const pageEditToggle = document.getElementById("page-edit-toggle");
+  if (pageEditToggle) {
+    const syncToggle = () => {
+      pageEditToggle.classList.toggle("on", settings.pageEdit);
+      pageEditToggle.setAttribute("aria-checked", String(Boolean(settings.pageEdit)));
+    };
+    syncToggle();
+    pageEditToggle.addEventListener("click", () => {
+      settings.pageEdit = !settings.pageEdit;
+      saveSettings(settings);
+      syncToggle();
+      setPageEdit(settings.pageEdit);
+    });
+    const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary" };
+    for (const [id, key] of Object.entries(colorInputs)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.addEventListener("input", (e) => {
+        pageLayout().colors = pageLayout().colors || {};
+        pageLayout().colors[key] = e.target.value;
+        applyPageLayout();
+        touchUiPrefs();
+      });
+    }
   }
 
   matchCompanionBtnEl.addEventListener("click", () => {
@@ -3478,10 +3506,10 @@ const DESKTOP_MQ = window.matchMedia("(min-width: 1024px)");
 
 const UI_PREFS_KEY = "todo-app-ui-prefs";
 function loadUiPrefs() {
-  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50 };
+  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50, pageLayout: {} };
   try {
     const s = JSON.parse(localStorage.getItem(UI_PREFS_KEY));
-    if (s && typeof s === "object") return { ...defaults, ...s };
+    if (s && typeof s === "object") return { ...defaults, ...s, pageLayout: { ...(s.pageLayout || {}) } };
   } catch (e) {
     // fall through to defaults
   }
@@ -3496,7 +3524,7 @@ function saveUiPrefs() {
 let uiSyncTimer = null;
 let lastSyncedUi = null;
 function uiSyncBody() {
-  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos });
+  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, pageLayout: uiPrefs.pageLayout });
 }
 function touchUiPrefs() {
   uiPrefs.updatedAt = new Date().toISOString();
@@ -3514,7 +3542,7 @@ async function pushUi() {
     if (!authSession) return;
     await supabaseRpc(
       "push_ui",
-      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, updatedAt: uiPrefs.updatedAt } },
+      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, pageLayout: uiPrefs.pageLayout, updatedAt: uiPrefs.updatedAt } },
       authSession.access_token
     );
     lastSyncedUi = body;
@@ -3540,6 +3568,7 @@ async function pullUi() {
       if (typeof d.title === "string") uiPrefs.title = d.title;
       if (typeof d.spotify === "string") uiPrefs.spotify = d.spotify;
       if (typeof d.bannerPos === "number") uiPrefs.bannerPos = d.bannerPos;
+      if (d.pageLayout && typeof d.pageLayout === "object") uiPrefs.pageLayout = d.pageLayout;
       uiPrefs.updatedAt = remote.updated_at;
       saveUiPrefs();
       lastSyncedUi = uiSyncBody();
@@ -3581,6 +3610,264 @@ function applyUiPrefs() {
   const title = document.getElementById("dt-title");
   if (title && document.activeElement !== title) title.textContent = uiPrefs.title || "pokeplanner";
   renderSpotifyEmbed();
+  applyPageLayout();
+}
+
+// ==========================================================================
+// Page edit mode (desktop only): drag to resize columns / margins / items and
+// recolor the clock, background, and button tiers. All of it persists in
+// uiPrefs.pageLayout (synced), and none of it is interactive unless edit mode
+// is on. Mobile never sees any of this.
+// ==========================================================================
+const PAGE_ITEMS = [
+  { id: "clock", sel: ".dt-clock" },
+  { id: "habit", sel: ".dt-habit-box" },
+  { id: "embed", sel: ".dt-embed" },
+  { id: "park", sel: ".dt-park-box" },
+  { id: "calendar", sel: ".dt-calendar" },
+  { id: "calTasks", sel: ".dt-cal-tasks" },
+];
+
+function pageLayout() {
+  if (!uiPrefs.pageLayout || typeof uiPrefs.pageLayout !== "object") uiPrefs.pageLayout = {};
+  return uiPrefs.pageLayout;
+}
+
+// Apply the saved sizes + colors to the desktop layout (idempotent).
+function applyPageLayout() {
+  if (!document.getElementById("dt-root")) return;
+  const pl = pageLayout();
+  const root = document.documentElement;
+
+  const colors = pl.colors || {};
+  const setVar = (name, val) => {
+    if (val) root.style.setProperty(name, val);
+    else root.style.removeProperty(name);
+  };
+  setVar("--dt-bg", colors.bg);
+  setVar("--dt-clock", colors.clock);
+  setVar("--dt-btn-primary", colors.primary);
+  setVar("--dt-btn-secondary", colors.secondary);
+
+  if (pl.contentMax) root.style.setProperty("--dt-content-max", pl.contentMax + "px");
+  else root.style.removeProperty("--dt-content-max");
+
+  const dash = document.querySelector(".dt-dashboard");
+  if (dash) dash.style.gridTemplateColumns = pl.dashCols || "";
+  const calRow = document.querySelector(".dt-cal-row");
+  if (calRow) calRow.style.gridTemplateColumns = pl.calCols || "";
+
+  const items = pl.items || {};
+  for (const item of PAGE_ITEMS) {
+    const el = document.querySelector(item.sel);
+    if (!el) continue;
+    const size = items[item.id];
+    if (size && (size.w || size.h)) {
+      if (size.w) el.style.width = size.w + "px";
+      if (size.h) el.style.height = size.h + "px";
+      el.style.marginLeft = "auto";
+      el.style.marginRight = "auto"; // stay centered in the cell when smaller
+      el.style.flex = "none";
+    } else {
+      el.style.width = "";
+      el.style.height = "";
+      el.style.marginLeft = "";
+      el.style.marginRight = "";
+      el.style.flex = "";
+    }
+  }
+}
+
+// A generic pointer-drag helper: onMove(dx, dy) each frame, onEnd() at the end.
+function pageDrag(startEvent, onMove, onEnd) {
+  startEvent.preventDefault();
+  const sx = startEvent.clientX;
+  const sy = startEvent.clientY;
+  const move = (e) => onMove(e.clientX - sx, e.clientY - sy);
+  const up = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
+    if (onEnd) onEnd();
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
+}
+
+let pageEditMode = false;
+
+function cssColsToPx(gridEl) {
+  return getComputedStyle(gridEl).gridTemplateColumns.split(" ").map(parseFloat);
+}
+function gridGap(gridEl) {
+  return parseFloat(getComputedStyle(gridEl).columnGap) || 0;
+}
+
+// Build resize handles for a grid's columns (adjacent-pair resize).
+function buildColHandles(gridEl, storeKey) {
+  const gap = gridGap(gridEl);
+  const place = () => {
+    const cols = cssColsToPx(gridEl);
+    const handles = gridEl.querySelectorAll(".dt-col-handle");
+    let x = 0;
+    for (let i = 0; i < cols.length - 1; i++) {
+      x += cols[i] + gap;
+      const h = handles[i];
+      if (h) h.style.left = x - gap / 2 + "px";
+    }
+  };
+  for (let i = 0; i < cssColsToPx(gridEl).length - 1; i++) {
+    const handle = document.createElement("div");
+    handle.className = "dt-col-handle";
+    handle.addEventListener("pointerdown", (e) => {
+      const cols = cssColsToPx(gridEl);
+      pageDrag(
+        e,
+        (dx) => {
+          const next = cols.slice();
+          next[i] = Math.max(40, cols[i] + dx);
+          next[i + 1] = Math.max(40, cols[i + 1] - dx);
+          gridEl.style.gridTemplateColumns = next.map((c) => c + "px").join(" ");
+          place();
+        },
+        () => {
+          pageLayout()[storeKey] = gridEl.style.gridTemplateColumns;
+          touchUiPrefs();
+        }
+      );
+    });
+    gridEl.appendChild(handle);
+  }
+  place();
+}
+
+// Margin (content width) handles pinned to the content's left/right edges.
+let marginHandles = [];
+function buildMarginHandles() {
+  const dash = document.querySelector(".dt-dashboard");
+  if (!dash) return;
+  const place = () => {
+    const r = dash.getBoundingClientRect();
+    if (marginHandles[0]) {
+      marginHandles[0].style.left = r.left - 8 + "px";
+      marginHandles[0].style.top = r.top + "px";
+      marginHandles[0].style.height = Math.min(r.height, 400) + "px";
+    }
+    if (marginHandles[1]) {
+      marginHandles[1].style.left = r.right - 8 + "px";
+      marginHandles[1].style.top = r.top + "px";
+      marginHandles[1].style.height = Math.min(r.height, 400) + "px";
+    }
+  };
+  [-1, 1].forEach((sideSign, idx) => {
+    const h = document.createElement("div");
+    h.className = "dt-margin-handle";
+    h.addEventListener("pointerdown", (e) => {
+      const startMax = dash.getBoundingClientRect().width;
+      pageDrag(
+        e,
+        (dx) => {
+          // dragging either edge outward widens content (shrinks margins)
+          const delta = sideSign === 1 ? dx : -dx;
+          const w = Math.max(400, Math.min(window.innerWidth, startMax + delta * 2));
+          document.documentElement.style.setProperty("--dt-content-max", w + "px");
+          place();
+        },
+        () => {
+          const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dt-content-max"));
+          if (w) {
+            pageLayout().contentMax = Math.round(w);
+            touchUiPrefs();
+          }
+        }
+      );
+    });
+    document.body.appendChild(h);
+    marginHandles.push(h);
+  });
+  place();
+  window.addEventListener("resize", place);
+}
+
+// Corner resize handle on each resizable box.
+function buildItemHandles() {
+  for (const item of PAGE_ITEMS) {
+    const el = document.querySelector(item.sel);
+    if (!el || el.querySelector(":scope > .dt-item-handle")) continue;
+    el.classList.add("dt-resizable");
+    const handle = document.createElement("div");
+    handle.className = "dt-item-handle";
+    handle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const rect = el.getBoundingClientRect();
+      pageDrag(
+        e,
+        (dx, dy) => {
+          const w = Math.max(80, rect.width + dx);
+          const h = Math.max(60, rect.height + dy);
+          el.style.width = w + "px";
+          el.style.height = h + "px";
+          el.style.marginLeft = "auto";
+          el.style.marginRight = "auto";
+          el.style.flex = "none";
+        },
+        () => {
+          pageLayout().items = pageLayout().items || {};
+          pageLayout().items[item.id] = {
+            w: Math.round(el.getBoundingClientRect().width),
+            h: Math.round(el.getBoundingClientRect().height),
+          };
+          touchUiPrefs();
+        }
+      );
+    });
+    el.appendChild(handle);
+  }
+}
+
+function teardownPageHandles() {
+  document.querySelectorAll(".dt-col-handle, .dt-item-handle").forEach((h) => h.remove());
+  marginHandles.forEach((h) => h.remove());
+  marginHandles = [];
+  document.querySelectorAll(".dt-resizable").forEach((el) => el.classList.remove("dt-resizable"));
+}
+
+function setPageEdit(on) {
+  pageEditMode = on;
+  const root = document.getElementById("dt-root");
+  if (!root) return;
+  root.classList.toggle("dt-editing", on);
+  const colors = document.getElementById("page-edit-colors");
+  if (colors) colors.classList.toggle("hidden", !on);
+  teardownPageHandles();
+  if (on) {
+    const dash = document.querySelector(".dt-dashboard");
+    if (dash) buildColHandles(dash, "dashCols");
+    const calRow = document.querySelector(".dt-cal-row");
+    if (calRow) buildColHandles(calRow, "calCols");
+    buildMarginHandles();
+    buildItemHandles();
+    syncPageEditColorInputs();
+  }
+}
+
+// Seed the color <input>s from the current custom colors (or computed defaults).
+function syncPageEditColorInputs() {
+  const colors = pageLayout().colors || {};
+  const cs = getComputedStyle(document.documentElement);
+  const bodyCs = getComputedStyle(document.body);
+  const toHex = (c) => {
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
+    if (!m) return null;
+    return "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("");
+  };
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val) el.value = val;
+  };
+  set("pe-bg", colors.bg || toHex(bodyCs.backgroundColor));
+  set("pe-clock", colors.clock || "#16171a");
+  set("pe-primary", colors.primary || toHex(cs.getPropertyValue("--input-bg")) || "#35363b");
+  set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
 }
 
 // Downscale a picked banner so its data URL stays small enough to sync.
@@ -4267,6 +4554,9 @@ function buildDesktop() {
   refreshPark();
   renderDexGrid();
   renderCalTeamExtras();
+
+  // restore page-edit mode if it was left on
+  if (settings.pageEdit) setPageEdit(true);
 }
 
 if (DESKTOP_MQ.matches) buildDesktop();

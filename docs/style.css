@@ -1579,11 +1579,15 @@ h1 {
   .dt-title,
   .dt-dashboard,
   .dt-section {
-    max-width: 1340px;
+    max-width: var(--dt-content-max, 1340px);
     margin-left: auto;
     margin-right: auto;
     padding-left: 28px;
     padding-right: 28px;
+  }
+  /* page-edit recolors (desktop only; fall back to the theme values) */
+  body {
+    background: var(--dt-bg, var(--bg));
   }
 
   /* ---- banner ---- */
@@ -1682,7 +1686,7 @@ h1 {
 
   /* generic empty labelled box */
   .dt-box {
-    background: var(--team-card);
+    background: var(--dt-btn-secondary, var(--team-card));
     border: 1px solid var(--border);
     border-radius: 18px;
     min-height: 150px;
@@ -1750,7 +1754,7 @@ h1 {
   .dt-clock-box {
     position: relative;
     flex: 1;
-    background: #16171a;
+    background: var(--dt-clock, #16171a);
     color: #fff;
     border-radius: 16px;
     padding: 14px 0;
@@ -1784,7 +1788,7 @@ h1 {
     font-size: 16px;
     font-weight: 600;
     color: var(--text);
-    background: var(--input-bg);
+    background: var(--dt-btn-primary, var(--input-bg));
     cursor: pointer;
     transition: filter 0.12s;
   }
@@ -2407,4 +2411,84 @@ h1 {
 .companion-cell.active {
   background: var(--input-bg);
   outline: 2px solid var(--color-add);
+}
+
+/* ---- page edit mode (desktop only) ---- */
+.page-edit-section {
+  display: none;
+}
+.page-edit-colors.hidden {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .page-edit-section {
+    display: block;
+  }
+  .dt-dashboard,
+  .dt-cal-row {
+    position: relative;
+  }
+  .dt-resizable {
+    position: relative;
+  }
+  /* dashed hint around resizable items while editing */
+  .dt-root.dt-editing .dt-clock,
+  .dt-root.dt-editing .dt-habit-box,
+  .dt-root.dt-editing .dt-embed,
+  .dt-root.dt-editing .dt-park-box,
+  .dt-root.dt-editing .dt-calendar,
+  .dt-root.dt-editing .dt-cal-tasks {
+    outline: 1px dashed rgba(127, 127, 127, 0.55);
+    outline-offset: 3px;
+  }
+  .dt-col-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    margin-left: -7px;
+    cursor: col-resize;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dt-col-handle::before {
+    content: "";
+    width: 3px;
+    height: 44px;
+    border-radius: 2px;
+    background: var(--color-add);
+    opacity: 0.8;
+  }
+  .dt-margin-handle {
+    position: fixed;
+    width: 16px;
+    cursor: col-resize;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dt-margin-handle::before {
+    content: "";
+    width: 4px;
+    height: 64px;
+    border-radius: 2px;
+    background: var(--color-add);
+    opacity: 0.6;
+  }
+  .dt-item-handle {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: var(--color-add);
+    cursor: nwse-resize;
+    z-index: 50;
+    opacity: 0.85;
+  }
 }
