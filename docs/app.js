@@ -3711,7 +3711,7 @@ function itemMaxWidth(el) {
 }
 
 // ---- column / margin geometry (page edit mode) ----
-const MIN_COL = 70; // minimum width for any resizable column
+const MIN_COL = 30; // minimum width for any resizable column
 const DASH_MINS_MARGIN = 0; // margins may shrink to the screen edge
 
 // Scale `sizes` to sum to `total`, then enforce per-index minimums, pulling the
