@@ -1881,8 +1881,8 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 3px;
-    row-gap: 4px;
+    gap: 4px;
+    row-gap: 5px;
     padding: 0 2px 2px;
   }
   .habit-mdot {
