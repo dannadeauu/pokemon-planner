@@ -3536,17 +3536,39 @@ if (supabaseConfigured()) {
   })();
 }
 
-// Coming back to the app (switching devices, reopening the tab) re-pulls so the
-// list, pokedex, and profile reflect changes made on another device.
+// Pull the account's latest tasks / pokedex / profile so this device reflects
+// edits made on another device.
+function pullAll() {
+  pullTasks();
+  pullDex();
+  pullPrefs();
+  pullUi();
+  pullCal();
+}
+
+// Coming back to the app (switching devices, reopening the tab) re-pulls; and
+// going away flushes any pending edit up before the tab is suspended, so a quick
+// edit-then-switch on mobile still reaches the other device.
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    pullTasks();
-    pullDex();
-    pullPrefs();
-    pullUi();
-    pullCal();
+  if (document.hidden) {
+    clearTimeout(taskSyncTimer);
+    pushTasks();
+  } else {
+    pullAll();
   }
 });
+// A backgrounded mobile PWA can be frozen before the debounced push fires, so
+// flush on the way out too.
+window.addEventListener("pagehide", () => {
+  clearTimeout(taskSyncTimer);
+  pushTasks();
+});
+// Keep an open tab current with the account without needing a manual refocus,
+// so edits made on another device show up on their own. Pulls no-op when signed
+// out; adopting remote only happens when it's newer than this device's edits.
+setInterval(() => {
+  if (!document.hidden) pullAll();
+}, 20000);
 
 for (const tab of document.querySelectorAll(".dex-tab")) {
   tab.addEventListener("click", () => {
