@@ -2088,10 +2088,18 @@ body.theme-dark .dex-cell.undiscovered img {
     font-size: 14px;
     font-weight: 600;
   }
-  .dt-embed-edit {
+  .dt-embed-controls {
     position: absolute;
     left: 10px;
     bottom: 10px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .dt-embed-edit {
     border: none;
     border-radius: 9px;
     padding: 6px 10px;
@@ -2101,14 +2109,115 @@ body.theme-dark .dex-cell.undiscovered img {
     color: #fff;
     background: rgba(0, 0, 0, 0.42);
     cursor: pointer;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s;
   }
-  /* only offer the spotify-link button while in page edit mode */
-  .dt-root.dt-editing .dt-embed-edit {
+  /* only offer the spotify link / connect buttons while in page edit mode */
+  .dt-root.dt-editing .dt-embed-controls {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  /* ---- spotify: now playing + recent playlists (below the embed) ---- */
+  .dt-spotify {
+    margin: 12px 0 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .dt-spotify.hidden {
+    display: none;
+  }
+  .np-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--team-card);
+    border-radius: 14px;
+    padding: 10px;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .np-art {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex: none;
+  }
+  .np-noart {
+    background: var(--input-bg);
+  }
+  .np-info {
+    min-width: 0;
+  }
+  .np-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-add);
+  }
+  .np-title {
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .np-artist {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .np-idle {
+    background: var(--team-card);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .pl-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .pl-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .pl-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-decoration: none;
+    color: var(--text);
+    min-width: 0;
+  }
+  .pl-item img,
+  .pl-noart {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+  .pl-noart {
+    background: var(--input-bg);
+  }
+  .pl-item span {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   /* ---- poképark box (relocated #park-mine: keep only the hopping floor) ---- */

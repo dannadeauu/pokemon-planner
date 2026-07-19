@@ -3555,6 +3555,7 @@ document.addEventListener("visibilitychange", () => {
     pushTasks();
   } else {
     pullAll();
+    if (typeof spotifyAuth !== "undefined" && spotifyAuth) refreshSpotifyNowPlaying();
   }
 });
 // A backgrounded mobile PWA can be frozen before the debounced push fires, so
@@ -3696,6 +3697,248 @@ function renderSpotifyEmbed() {
   frame.innerHTML = embed
     ? `<iframe src="${embed}" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`
     : `<div class="dt-embed-empty">add a spotify playlist link</div>`;
+}
+
+// ==========================================================================
+// Spotify sign-in (Authorization Code + PKCE, no backend/secret) layered on top
+// of the basic embed: a live "now playing" card and the user's recent playlists.
+// Needs the user's own Spotify app Client ID with THIS page's URL registered as
+// a redirect URI. Everything degrades to just the basic embed if not connected.
+// ==========================================================================
+const SPOTIFY_CLIENT_KEY = "spotify-client-id";
+const SPOTIFY_AUTH_KEY = "spotify-auth";
+const SPOTIFY_VERIFIER_KEY = "spotify-pkce-verifier";
+const SPOTIFY_SCOPES =
+  "user-read-currently-playing user-read-playback-state playlist-read-private";
+
+function spotifyRedirectUri() {
+  return location.origin + location.pathname;
+}
+function spotifyClientId() {
+  return localStorage.getItem(SPOTIFY_CLIENT_KEY) || "";
+}
+function loadSpotifyAuth() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SPOTIFY_AUTH_KEY));
+    if (s && s.access_token) return s;
+  } catch (e) {
+    // fall through
+  }
+  return null;
+}
+let spotifyAuth = loadSpotifyAuth();
+function saveSpotifyAuth() {
+  if (spotifyAuth) localStorage.setItem(SPOTIFY_AUTH_KEY, JSON.stringify(spotifyAuth));
+  else localStorage.removeItem(SPOTIFY_AUTH_KEY);
+}
+
+function spotifyB64Url(bytes) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(bytes)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+function spotifyRandom(len) {
+  const arr = crypto.getRandomValues(new Uint8Array(len));
+  return spotifyB64Url(arr).slice(0, len);
+}
+
+async function spotifyConnect() {
+  let clientId = spotifyClientId();
+  if (!clientId) {
+    clientId = window.prompt(
+      "Enter your Spotify app Client ID.\n\nCreate a free app at developer.spotify.com/dashboard, then copy its Client ID here.",
+      ""
+    );
+    if (!clientId || !clientId.trim()) return;
+    clientId = clientId.trim();
+    localStorage.setItem(SPOTIFY_CLIENT_KEY, clientId);
+    window.alert(
+      "One-time setup: in your Spotify app's settings, add this exact Redirect URI, then continue:\n\n" +
+        spotifyRedirectUri()
+    );
+  }
+  const verifier = spotifyRandom(96);
+  sessionStorage.setItem(SPOTIFY_VERIFIER_KEY, verifier);
+  const challenge = spotifyB64Url(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))
+  );
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: spotifyRedirectUri(),
+    scope: SPOTIFY_SCOPES,
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+    state: "spotify",
+  });
+  location.href = "https://accounts.spotify.com/authorize?" + params.toString();
+}
+
+// Runs on load: if we came back from Spotify's auth page, trade the code for
+// tokens. Uses the query string + a "spotify" state so it never collides with
+// the Google (hash-based) auth redirect.
+async function handleSpotifyRedirect() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("state") !== "spotify" || !q.get("code")) return;
+  const code = q.get("code");
+  const verifier = sessionStorage.getItem(SPOTIFY_VERIFIER_KEY);
+  history.replaceState(null, "", location.pathname);
+  if (!verifier) return;
+  try {
+    const res = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: spotifyRedirectUri(),
+        client_id: spotifyClientId(),
+        code_verifier: verifier,
+      }),
+    });
+    if (!res.ok) throw new Error("token exchange failed");
+    const data = await res.json();
+    spotifyAuth = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || "",
+      expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+    };
+    saveSpotifyAuth();
+  } catch (e) {
+    // leave disconnected; the button stays "connect spotify"
+  }
+  sessionStorage.removeItem(SPOTIFY_VERIFIER_KEY);
+}
+
+async function ensureSpotifyToken() {
+  if (!spotifyAuth) return null;
+  if (Date.now() < spotifyAuth.expires_at - 60000) return spotifyAuth.access_token;
+  if (!spotifyAuth.refresh_token) return spotifyAuth.access_token;
+  try {
+    const res = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: spotifyAuth.refresh_token,
+        client_id: spotifyClientId(),
+      }),
+    });
+    if (!res.ok) throw new Error("refresh failed");
+    const data = await res.json();
+    spotifyAuth.access_token = data.access_token;
+    if (data.refresh_token) spotifyAuth.refresh_token = data.refresh_token;
+    spotifyAuth.expires_at = Date.now() + (data.expires_in || 3600) * 1000;
+    saveSpotifyAuth();
+    return spotifyAuth.access_token;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function spotifyApi(path) {
+  const token = await ensureSpotifyToken();
+  if (!token) return null;
+  let res;
+  try {
+    res = await fetch("https://api.spotify.com/v1" + path, {
+      headers: { Authorization: "Bearer " + token },
+    });
+  } catch (e) {
+    return null;
+  }
+  if (res.status === 401) {
+    spotifyDisconnect();
+    return null;
+  }
+  if (res.status === 204) return { empty: true };
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function spotifyDisconnect() {
+  spotifyAuth = null;
+  saveSpotifyAuth();
+  renderSpotifyPanel();
+}
+
+async function refreshSpotifyNowPlaying() {
+  const np = document.getElementById("dt-now-playing");
+  if (!np || !spotifyAuth) return;
+  const data = await spotifyApi("/me/player/currently-playing");
+  if (!data || data.empty || !data.item) {
+    np.innerHTML = `<div class="np-idle">nothing playing right now</div>`;
+    return;
+  }
+  const t = data.item;
+  const art = t.album && t.album.images && t.album.images[0] ? t.album.images[0].url : "";
+  const artists = (t.artists || []).map((a) => a.name).join(", ");
+  const url = (t.external_urls && t.external_urls.spotify) || "#";
+  np.innerHTML =
+    `<a class="np-card" href="${url}" target="_blank" rel="noopener">` +
+    (art ? `<img class="np-art" src="${art}" alt="" />` : `<div class="np-art np-noart"></div>`) +
+    `<div class="np-info">` +
+    `<div class="np-label">${data.is_playing ? "now playing" : "paused"}</div>` +
+    `<div class="np-title">${calEsc(t.name)}</div>` +
+    `<div class="np-artist">${calEsc(artists)}</div>` +
+    `</div></a>`;
+}
+
+async function refreshSpotifyPlaylists() {
+  const el = document.getElementById("dt-playlists");
+  if (!el || !spotifyAuth) return;
+  const data = await spotifyApi("/me/playlists?limit=6");
+  if (!data || !Array.isArray(data.items)) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML =
+    `<div class="pl-title">your playlists</div>` +
+    `<div class="pl-grid">` +
+    data.items
+      .map((p) => {
+        const img = p.images && p.images[0] ? p.images[0].url : "";
+        const url = (p.external_urls && p.external_urls.spotify) || "#";
+        return (
+          `<a class="pl-item" href="${url}" target="_blank" rel="noopener" title="${calEsc(p.name)}">` +
+          (img ? `<img src="${img}" alt="" />` : `<div class="pl-noart"></div>`) +
+          `<span>${calEsc(p.name)}</span></a>`
+        );
+      })
+      .join("") +
+    `</div>`;
+}
+
+function renderSpotifyPanel() {
+  const connectBtn = document.getElementById("dt-spotify-connect");
+  if (connectBtn) connectBtn.textContent = spotifyAuth ? "disconnect spotify" : "connect spotify";
+  const panel = document.getElementById("dt-spotify");
+  if (!panel) return;
+  panel.classList.toggle("hidden", !spotifyAuth);
+  if (spotifyAuth) {
+    refreshSpotifyNowPlaying();
+    refreshSpotifyPlaylists();
+  }
+}
+
+// Wire the connect/disconnect button + initialize (desktop only).
+function initSpotify() {
+  const connectBtn = document.getElementById("dt-spotify-connect");
+  if (connectBtn) {
+    connectBtn.addEventListener("click", () => {
+      if (spotifyAuth) spotifyDisconnect();
+      else spotifyConnect();
+    });
+  }
+  (async () => {
+    await handleSpotifyRedirect();
+    renderSpotifyPanel();
+  })();
+  // keep "now playing" current while the tab is visible
+  setInterval(() => {
+    if (!document.hidden && spotifyAuth) refreshSpotifyNowPlaying();
+  }, 20000);
 }
 
 function applyUiPrefs() {
@@ -5161,6 +5404,7 @@ function buildDesktop() {
   renderCalTeamExtras();
   renderHabitTracker();
   applyEditability(); // title/habit labels start locked unless edit mode is on
+  initSpotify();
 
   // restore page-edit mode if it was left on
   if (settings.pageEdit) setPageEdit(true);
