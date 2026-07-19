@@ -1886,8 +1886,8 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 0 2px 2px;
   }
   .habit-mdot {
-    width: 9px;
-    height: 9px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--card); /* starts white (dark gray card in dark mode) */
   }
