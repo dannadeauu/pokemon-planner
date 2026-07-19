@@ -947,6 +947,13 @@ h1 {
   margin-top: 10px;
 }
 
+/* "clear task list" sits below "yes" with extra breathing room */
+.clear-task-list-btn {
+  margin-top: 26px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
 .friends-btn-secondary {
   background: var(--input-bg);
   color: var(--text);
@@ -1645,11 +1652,14 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     gap: 8px;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.15s;
   }
-  .dt-banner:hover .dt-banner-btns,
-  .dt-banner.repositioning .dt-banner-btns {
+  /* banner is only changeable / repositionable in page edit mode */
+  .dt-root.dt-editing .dt-banner:hover .dt-banner-btns,
+  .dt-root.dt-editing .dt-banner.repositioning .dt-banner-btns {
     opacity: 1;
+    pointer-events: auto;
   }
   .dt-banner-btn {
     border: none;
@@ -2105,8 +2115,9 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-park-box {
     padding: 0;
     overflow: hidden;
-    /* just an outline, no fill */
+    /* just a thick primary-colored outline, no fill */
     background: transparent;
+    border: 3px solid var(--dt-btn-primary, var(--input-bg));
     min-height: 190px;
     /* let the floor stretch to the box so hoppers always fit the resized box */
     display: flex;
@@ -2152,6 +2163,29 @@ body.theme-dark .dex-cell.undiscovered img {
     font-size: 20px;
     font-weight: 800;
     margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .dt-cal-tabs {
+    display: inline-flex;
+    gap: 4px;
+  }
+  .dt-cal-tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .dt-cal-tab.active {
+    background: var(--color-add);
+    color: #fff;
   }
   .dt-cal-grid {
     display: grid;

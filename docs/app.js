@@ -264,6 +264,11 @@ function storeDeleteTodo(id) {
   commitTaskChange();
 }
 
+function storeClearTodos() {
+  taskStore.todos = [];
+  commitTaskChange();
+}
+
 function storeMegaEvolve(id, variant) {
   const todo = taskStore.todos.find((t) => t.id === id);
   if (!todo || todo.status !== "done!") return;
@@ -1344,6 +1349,30 @@ deleteTaskYesEl.addEventListener("click", () => {
 deleteTaskOverlayEl.addEventListener("click", (e) => {
   if (e.target === deleteTaskOverlayEl) closeDeleteConfirm();
 });
+
+// "clear task list" wipes every task, behind a second confirmation.
+const clearTaskListEl = document.getElementById("clear-task-list");
+const clearTasksOverlayEl = document.getElementById("clear-tasks-overlay");
+const clearTasksYesEl = document.getElementById("clear-tasks-yes");
+const clearTasksNoEl = document.getElementById("clear-tasks-no");
+function closeClearConfirm() {
+  clearTasksOverlayEl.classList.add("hidden");
+}
+if (clearTaskListEl) {
+  clearTaskListEl.addEventListener("click", () => {
+    closeDeleteConfirm(); // leave the per-task prompt, ask the bigger question
+    clearTasksOverlayEl.classList.remove("hidden");
+  });
+  clearTasksNoEl.addEventListener("click", closeClearConfirm);
+  clearTasksYesEl.addEventListener("click", () => {
+    closeClearConfirm();
+    storeClearTodos();
+    refresh();
+  });
+  clearTasksOverlayEl.addEventListener("click", (e) => {
+    if (e.target === clearTasksOverlayEl) closeClearConfirm();
+  });
+}
 
 async function megaEvolve(id, variant) {
   storeMegaEvolve(id, variant);
@@ -4076,7 +4105,7 @@ function renderHabitChecks() {
 
     const label = document.createElement("div");
     label.className = "habit-check-label";
-    label.contentEditable = "true";
+    label.contentEditable = String(Boolean(pageEditMode));
     label.spellcheck = false;
     label.textContent = habitData.labels[i] || "";
     label.addEventListener("blur", () => {
@@ -4308,6 +4337,17 @@ function teardownPageHandles() {
   document.querySelectorAll(".dt-resizable").forEach((el) => el.classList.remove("dt-resizable"));
 }
 
+// The page title + habit labels are only editable in page edit mode (task text
+// editing is intentionally left alone). Banner controls are gated via CSS.
+function applyEditability() {
+  const on = Boolean(pageEditMode);
+  const title = document.getElementById("dt-title");
+  if (title) title.contentEditable = String(on);
+  document
+    .querySelectorAll(".habit-check-label")
+    .forEach((l) => (l.contentEditable = String(on)));
+}
+
 function setPageEdit(on) {
   pageEditMode = on;
   const root = document.getElementById("dt-root");
@@ -4315,6 +4355,7 @@ function setPageEdit(on) {
   root.classList.toggle("dt-editing", on);
   const colors = document.getElementById("page-edit-colors");
   if (colors) colors.classList.toggle("hidden", !on);
+  applyEditability();
   teardownPageHandles();
   if (on) {
     buildDashboardHandles();
@@ -4538,6 +4579,8 @@ async function pullCal() {
 
 // A month grid; each day is a cell that holds its due-that-day items as colored
 // chips and opens the add/edit popup when clicked.
+let calFilter = "all"; // "all" | "todo" (todo hides completed assignments)
+
 function renderDesktopCalendar() {
   const el = document.getElementById("dt-calendar");
   if (!el) return;
@@ -4556,6 +4599,7 @@ function renderDesktopCalendar() {
     const dateStr = calDateStr(year, month, d);
     const chips = calItems
       .filter((it) => it.due === dateStr)
+      .filter((it) => calFilter === "all" || it.completion !== "done!")
       .map(
         // 50% opacity of the class color, over the calendar cell
         (it) =>
@@ -4568,8 +4612,21 @@ function renderDesktopCalendar() {
       `<div class="dt-cal-chips">${chips}</div></div>`;
   }
   el.innerHTML =
-    `<div class="dt-cal-month">${monthName} ${year}</div>` +
+    `<div class="dt-cal-month">` +
+    `<span class="dt-cal-month-name">${monthName} ${year}</span>` +
+    `<span class="dt-cal-tabs">` +
+    `<button class="dt-cal-tab${calFilter === "todo" ? " active" : ""}" data-cf="todo" type="button">to-do</button>` +
+    `<button class="dt-cal-tab${calFilter === "all" ? " active" : ""}" data-cf="all" type="button">all</button>` +
+    `</span>` +
+    `</div>` +
     `<div class="dt-cal-grid">${cells}</div>`;
+
+  el.querySelectorAll(".dt-cal-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      calFilter = tab.dataset.cf;
+      renderDesktopCalendar();
+    });
+  });
 
   el.querySelectorAll(".dt-cal-day[data-date]").forEach((cell) => {
     cell.addEventListener("click", (e) => {
@@ -5054,6 +5111,7 @@ function buildDesktop() {
   renderDexGrid();
   renderCalTeamExtras();
   renderHabitTracker();
+  applyEditability(); // title/habit labels start locked unless edit mode is on
 
   // restore page-edit mode if it was left on
   if (settings.pageEdit) setPageEdit(true);
