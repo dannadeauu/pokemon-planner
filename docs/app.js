@@ -4158,14 +4158,41 @@ function pageDrag(startEvent, onMove, onEnd) {
   startEvent.preventDefault();
   const sx = startEvent.clientX;
   const sy = startEvent.clientY;
+  // Capture the pointer to the handle so the drag keeps tracking even when the
+  // cursor leaves the column or passes over the spotify iframe (which would
+  // otherwise swallow the events and leave the item stuck in drag mode). The
+  // capture is always released on pointerup / pointercancel.
+  const handle = startEvent.currentTarget || startEvent.target;
+  const pointerId = startEvent.pointerId;
+  const captured =
+    handle && handle.setPointerCapture && pointerId != null
+      ? ((() => {
+          try {
+            handle.setPointerCapture(pointerId);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        })())
+      : false;
+
   const move = (e) => onMove(e.clientX - sx, e.clientY - sy);
-  const up = () => {
+  const end = () => {
     document.removeEventListener("pointermove", move);
-    document.removeEventListener("pointerup", up);
+    document.removeEventListener("pointerup", end);
+    document.removeEventListener("pointercancel", end);
+    if (captured) {
+      try {
+        handle.releasePointerCapture(pointerId);
+      } catch (e) {
+        // already released
+      }
+    }
     if (onEnd) onEnd();
   };
   document.addEventListener("pointermove", move);
-  document.addEventListener("pointerup", up);
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
 }
 
 let pageEditMode = false;
