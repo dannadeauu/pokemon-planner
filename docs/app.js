@@ -835,41 +835,13 @@ function initSettings() {
     });
   }
 
-  // page edit mode toggle + recolor pickers (desktop only)
-  const pageEditToggle = document.getElementById("page-edit-toggle");
-  if (pageEditToggle) {
-    const syncToggle = () => {
-      pageEditToggle.classList.toggle("on", settings.pageEdit);
-      pageEditToggle.setAttribute("aria-checked", String(Boolean(settings.pageEdit)));
-    };
-    syncToggle();
-    pageEditToggle.addEventListener("click", () => {
-      settings.pageEdit = !settings.pageEdit;
-      saveSettings(settings);
-      syncToggle();
-      setPageEdit(settings.pageEdit);
+  // "edit page" leaves the settings menu and drops into the draggable edit menu
+  const pageEditBtn = document.getElementById("page-edit-btn");
+  if (pageEditBtn) {
+    pageEditBtn.addEventListener("click", () => {
+      closeHub();
+      setPageEdit(true);
     });
-    const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary" };
-    for (const [id, key] of Object.entries(colorInputs)) {
-      const el = document.getElementById(id);
-      if (!el) continue;
-      el.addEventListener("input", (e) => {
-        pageLayout().colors = pageLayout().colors || {};
-        pageLayout().colors[key] = e.target.value;
-        applyPageLayout();
-        touchUiPrefs();
-      });
-    }
-    const resetColorsBtn = document.getElementById("pe-reset-colors");
-    if (resetColorsBtn) {
-      resetColorsBtn.addEventListener("click", () => {
-        // drop the custom overrides so the layout falls back to the theme colors
-        pageLayout().colors = {};
-        applyPageLayout();
-        syncPageEditColorInputs();
-        touchUiPrefs();
-      });
-    }
   }
 
   matchCompanionBtnEl.addEventListener("click", () => {
@@ -3941,6 +3913,17 @@ function initSpotify() {
   }, 20000);
 }
 
+// Render the title: use this device's saved rich (formatted) version when its
+// plain text still matches the synced title, otherwise fall back to plain text.
+function renderTitle() {
+  const title = document.getElementById("dt-title");
+  if (!title || document.activeElement === title) return;
+  const plain = uiPrefs.title || "pokeplanner";
+  const rich = deviceStyle.richText && deviceStyle.richText.title;
+  if (rich && stripHtml(rich).trim() === plain.trim()) title.innerHTML = rich;
+  else title.textContent = plain;
+}
+
 function applyUiPrefs() {
   const banner = document.getElementById("dt-banner");
   if (banner) {
@@ -3948,8 +3931,7 @@ function applyUiPrefs() {
     banner.classList.toggle("has-image", Boolean(uiPrefs.banner));
     banner.style.backgroundPosition = `center ${uiPrefs.bannerPos != null ? uiPrefs.bannerPos : 50}%`;
   }
-  const title = document.getElementById("dt-title");
-  if (title && document.activeElement !== title) title.textContent = uiPrefs.title || "pokeplanner";
+  renderTitle();
   renderSpotifyEmbed();
   applyPageLayout();
 }
@@ -4126,13 +4108,41 @@ function alignBoxTitles() {
   }
 }
 
+// ---- per-device look (page-edit colors + rich-text formatting) ----
+// Stored locally only; never synced, so each device keeps its own look.
+const DEVICE_STYLE_KEY = "todo-app-device-style";
+function loadDeviceStyle() {
+  try {
+    const s = JSON.parse(localStorage.getItem(DEVICE_STYLE_KEY));
+    if (s && typeof s === "object") {
+      return {
+        colors: s.colors && typeof s.colors === "object" ? s.colors : {},
+        richText: s.richText && typeof s.richText === "object" ? s.richText : {},
+        menuPos: s.menuPos || null,
+      };
+    }
+  } catch (e) {
+    // fall through to defaults
+  }
+  return { colors: {}, richText: {}, menuPos: null };
+}
+let deviceStyle = loadDeviceStyle();
+function saveDeviceStyle() {
+  localStorage.setItem(DEVICE_STYLE_KEY, JSON.stringify(deviceStyle));
+}
+function stripHtml(html) {
+  const d = document.createElement("div");
+  d.innerHTML = html || "";
+  return d.textContent || "";
+}
+
 // Apply the saved sizes + colors to the desktop layout (idempotent).
 function applyPageLayout() {
   if (!document.getElementById("dt-root")) return;
   const pl = pageLayout();
   const root = document.documentElement;
 
-  const colors = pl.colors || {};
+  const colors = deviceStyle.colors || {};
   const setVar = (name, val) => {
     if (val) root.style.setProperty(name, val);
     else root.style.removeProperty(name);
@@ -4372,9 +4382,16 @@ function renderHabitChecks() {
     label.className = "habit-check-label";
     label.contentEditable = String(Boolean(pageEditMode));
     label.spellcheck = false;
-    label.textContent = habitData.labels[i] || "";
+    const plainLabel = habitData.labels[i] || "";
+    const richLabel = deviceStyle.richText && deviceStyle.richText.habit && deviceStyle.richText.habit[i];
+    if (richLabel && stripHtml(richLabel).trim() === plainLabel.trim()) label.innerHTML = richLabel;
+    else label.textContent = plainLabel;
     label.addEventListener("blur", () => {
       habitData.labels[i] = label.textContent.trim() || habitData.labels[i];
+      deviceStyle.richText = deviceStyle.richText || {};
+      deviceStyle.richText.habit = deviceStyle.richText.habit || [];
+      deviceStyle.richText.habit[i] = label.innerHTML;
+      saveDeviceStyle();
       saveHabits();
     });
     label.addEventListener("keydown", (e) => {
@@ -4645,8 +4662,8 @@ function setPageEdit(on) {
   const root = document.getElementById("dt-root");
   if (!root) return;
   root.classList.toggle("dt-editing", on);
-  const colors = document.getElementById("page-edit-colors");
-  if (colors) colors.classList.toggle("hidden", !on);
+  const menu = document.getElementById("dt-edit-menu");
+  if (menu) menu.classList.toggle("hidden", !on);
   applyEditability();
   teardownPageHandles();
   if (on) {
@@ -4655,12 +4672,13 @@ function setPageEdit(on) {
     if (calRow) buildColHandles(calRow, "calCols");
     buildItemHandles();
     syncPageEditColorInputs();
+    updateFmtSelectionUI();
   }
 }
 
 // Seed the color <input>s from the current custom colors (or computed defaults).
 function syncPageEditColorInputs() {
-  const colors = pageLayout().colors || {};
+  const colors = deviceStyle.colors || {};
   const cs = getComputedStyle(document.documentElement);
   const bodyCs = getComputedStyle(document.body);
   const toHex = (c) => {
@@ -4676,6 +4694,172 @@ function syncPageEditColorInputs() {
   set("pe-clock", colors.clock || "#16171a");
   set("pe-primary", colors.primary || toHex(cs.getPropertyValue("--input-bg")) || "#35363b");
   set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
+}
+
+// ==========================================================================
+// The draggable page-edit menu: per-device color swatches + rich-text
+// formatting (bold / italic / color) for whatever text is highlighted in the
+// editable title or habit labels. All of it saves to deviceStyle (local).
+// ==========================================================================
+let editFmtRange = null; // last non-empty selection inside an editable element
+
+function fmtEditableOf(node) {
+  if (!node) return null;
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  return el ? el.closest(".dt-title, .habit-check-label") : null;
+}
+
+// Remember which editable text is currently selected so the format buttons can
+// act on it even after focus moves to the menu.
+function captureEditSelection() {
+  const sel = document.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+  const editable = fmtEditableOf(sel.anchorNode);
+  if (!editable || !editable.isContentEditable) return null;
+  return { range: sel.getRangeAt(0).cloneRange(), editable };
+}
+
+function updateFmtSelectionUI() {
+  const menu = document.getElementById("dt-edit-menu");
+  if (!menu) return;
+  menu.classList.toggle("no-selection", !editFmtRange);
+  const b = document.getElementById("fmt-bold");
+  const it = document.getElementById("fmt-italic");
+  try {
+    if (b) b.classList.toggle("active", document.queryCommandState("bold"));
+    if (it) it.classList.toggle("active", document.queryCommandState("italic"));
+  } catch (e) {
+    // queryCommandState can throw with no selection; ignore
+  }
+}
+
+// Persist the editable's formatted HTML per-device (keeping the synced plain
+// text in step, so cross-device the base text still matches).
+function saveRichText(editable) {
+  deviceStyle.richText = deviceStyle.richText || {};
+  if (editable.classList.contains("dt-title")) {
+    deviceStyle.richText.title = editable.innerHTML;
+    uiPrefs.title = (editable.textContent || "").trim() || "pokeplanner";
+    touchUiPrefs();
+  } else if (editable.classList.contains("habit-check-label")) {
+    const labels = [...document.querySelectorAll(".habit-check-label")];
+    const i = labels.indexOf(editable);
+    if (i >= 0) {
+      deviceStyle.richText.habit = deviceStyle.richText.habit || [];
+      deviceStyle.richText.habit[i] = editable.innerHTML;
+      habitData.labels[i] = (editable.textContent || "").trim() || habitData.labels[i];
+      saveHabits();
+    }
+  }
+  saveDeviceStyle();
+}
+
+// Run a formatting command on the remembered selection, then save.
+function applyFmt(fn) {
+  if (!editFmtRange) return;
+  const { range, editable } = editFmtRange;
+  editable.focus();
+  const sel = document.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  fn();
+  saveRichText(editable);
+  const s = document.getSelection();
+  if (s.rangeCount && !s.isCollapsed) {
+    editFmtRange = { range: s.getRangeAt(0).cloneRange(), editable };
+  }
+}
+
+function initEditMenu() {
+  const menu = document.getElementById("dt-edit-menu");
+  if (!menu) return;
+
+  // per-device color swatches
+  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary" };
+  for (const [id, key] of Object.entries(colorInputs)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.addEventListener("input", (e) => {
+      deviceStyle.colors = deviceStyle.colors || {};
+      deviceStyle.colors[key] = e.target.value;
+      saveDeviceStyle();
+      applyPageLayout();
+    });
+  }
+  const resetBtn = document.getElementById("pe-reset-colors");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      deviceStyle.colors = {};
+      saveDeviceStyle();
+      applyPageLayout();
+      syncPageEditColorInputs();
+    });
+  }
+  const doneBtn = document.getElementById("dt-edit-done");
+  if (doneBtn) doneBtn.addEventListener("click", () => setPageEdit(false));
+
+  // restore the last dragged position (per-device)
+  if (deviceStyle.menuPos) {
+    menu.style.left = deviceStyle.menuPos.left + "px";
+    menu.style.top = deviceStyle.menuPos.top + "px";
+    menu.style.right = "auto";
+    menu.style.bottom = "auto";
+  }
+  // drag by the header
+  const header = document.getElementById("dt-edit-drag");
+  if (header) {
+    header.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".dt-edit-done")) return;
+      const rect = menu.getBoundingClientRect();
+      const startLeft = rect.left;
+      const startTop = rect.top;
+      const w = rect.width;
+      const h = rect.height;
+      menu.style.right = "auto";
+      menu.style.bottom = "auto";
+      menu.style.left = startLeft + "px";
+      menu.style.top = startTop + "px";
+      pageDrag(
+        e,
+        (dx, dy) => {
+          menu.style.left = Math.min(Math.max(0, startLeft + dx), window.innerWidth - w) + "px";
+          menu.style.top = Math.min(Math.max(0, startTop + dy), window.innerHeight - h) + "px";
+        },
+        () => {
+          deviceStyle.menuPos = {
+            left: Math.round(menu.getBoundingClientRect().left),
+            top: Math.round(menu.getBoundingClientRect().top),
+          };
+          saveDeviceStyle();
+        }
+      );
+    });
+  }
+
+  // text formatting acts on the highlighted editable text
+  const bold = document.getElementById("fmt-bold");
+  const italic = document.getElementById("fmt-italic");
+  const color = document.getElementById("fmt-color");
+  // keep the selection when pressing the buttons (don't let them steal focus)
+  [bold, italic].forEach((b) => {
+    if (!b) return;
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+  });
+  if (bold) bold.addEventListener("click", () => applyFmt(() => document.execCommand("bold")));
+  if (italic) italic.addEventListener("click", () => applyFmt(() => document.execCommand("italic")));
+  if (color) {
+    color.addEventListener("input", () =>
+      applyFmt(() => document.execCommand("foreColor", false, color.value))
+    );
+  }
+
+  // track the current text selection while editing
+  document.addEventListener("selectionchange", () => {
+    if (!pageEditMode) return;
+    const cap = captureEditSelection();
+    if (cap) editFmtRange = cap;
+    updateFmtSelectionUI();
+  });
 }
 
 // Downscale a picked banner so its data URL stays small enough to sync.
@@ -5374,10 +5558,19 @@ function buildDesktop() {
     }
   });
   titleEl.addEventListener("blur", () => {
-    const t = (titleEl.textContent || "").trim() || "pokeplanner";
-    titleEl.textContent = t;
-    if (t !== uiPrefs.title) {
-      uiPrefs.title = t;
+    const t = (titleEl.textContent || "").trim();
+    if (!t) {
+      titleEl.textContent = "pokeplanner";
+      if (deviceStyle.richText) delete deviceStyle.richText.title;
+    } else {
+      // keep this device's formatting, sync the plain text as the shared base
+      deviceStyle.richText = deviceStyle.richText || {};
+      deviceStyle.richText.title = titleEl.innerHTML;
+    }
+    saveDeviceStyle();
+    const plain = (titleEl.textContent || "").trim() || "pokeplanner";
+    if (plain !== uiPrefs.title) {
+      uiPrefs.title = plain;
       touchUiPrefs();
     }
   });
@@ -5405,9 +5598,21 @@ function buildDesktop() {
   renderHabitTracker();
   applyEditability(); // title/habit labels start locked unless edit mode is on
   initSpotify();
+  initEditMenu();
 
-  // restore page-edit mode if it was left on
-  if (settings.pageEdit) setPageEdit(true);
+  // one-time migration: adopt any previously-synced page-edit colors as this
+  // device's local colors (colors are per-device now, no longer synced)
+  const legacyColors = uiPrefs.pageLayout && uiPrefs.pageLayout.colors;
+  if (legacyColors && Object.keys(legacyColors).length && !Object.keys(deviceStyle.colors).length) {
+    deviceStyle.colors = { ...legacyColors };
+    saveDeviceStyle();
+    applyPageLayout();
+  }
+  // edit mode is a transient button now, not a persisted toggle
+  if (settings.pageEdit) {
+    settings.pageEdit = false;
+    saveSettings(settings);
+  }
 }
 
 if (DESKTOP_MQ.matches) buildDesktop();

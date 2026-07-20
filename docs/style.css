@@ -2905,4 +2905,158 @@ body.theme-dark .dex-cell.undiscovered img {
     z-index: 50;
     opacity: 0.85;
   }
+
+  /* ---- draggable page-edit menu (bottom right) ---- */
+  .dt-edit-menu {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 250px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    z-index: 120;
+    overflow: hidden;
+    user-select: none;
+  }
+  .dt-edit-menu.hidden {
+    display: none;
+  }
+  .dt-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--color-add);
+    color: #fff;
+    cursor: grab;
+    touch-action: none;
+  }
+  .dt-edit-header:active {
+    cursor: grabbing;
+  }
+  .dt-edit-title {
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .dt-edit-done {
+    border: none;
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .dt-edit-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .dt-edit-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .dt-edit-swatches {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .dt-swatch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .dt-swatch input[type="color"] {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: none;
+    cursor: pointer;
+    flex: none;
+  }
+  .dt-swatch input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+  .dt-swatch input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 5px;
+  }
+  .dt-edit-reset {
+    border: none;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .dt-edit-text {
+    display: flex;
+    gap: 8px;
+  }
+  .dt-fmt {
+    width: 38px;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 16px;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .dt-fmt.active {
+    background: var(--color-add);
+    color: #fff;
+    border-color: var(--color-add);
+  }
+  .dt-fmt-color {
+    position: relative;
+    overflow: hidden;
+  }
+  .dt-fmt-color span {
+    font-weight: 800;
+    border-bottom: 3px solid var(--color-add);
+    line-height: 0.9;
+  }
+  .dt-fmt-color input[type="color"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    padding: 0;
+    border: none;
+  }
+  .dt-edit-menu.no-selection .dt-edit-text {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .dt-edit-hint {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .dt-edit-menu:not(.no-selection) .dt-edit-hint {
+    display: none;
+  }
 }

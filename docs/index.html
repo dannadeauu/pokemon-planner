@@ -244,17 +244,7 @@
       </div>
 
       <div class="settings-section page-edit-section" id="page-edit-section">
-        <div class="friends-toggle-row">
-          <span class="friends-toggle-label">page edit mode</span>
-          <button class="friends-toggle" id="page-edit-toggle" type="button" role="switch" aria-checked="false"></button>
-        </div>
-        <div class="page-edit-colors hidden" id="page-edit-colors">
-          <div class="color-row"><label for="pe-bg">background</label><input type="color" id="pe-bg" /></div>
-          <div class="color-row"><label for="pe-clock">clock</label><input type="color" id="pe-clock" /></div>
-          <div class="color-row"><label for="pe-primary">primary buttons</label><input type="color" id="pe-primary" /></div>
-          <div class="color-row"><label for="pe-secondary">secondary buttons</label><input type="color" id="pe-secondary" /></div>
-          <button class="friends-btn friends-btn-secondary" id="pe-reset-colors" type="button">reset to default colors</button>
-        </div>
+        <button class="friends-btn" id="page-edit-btn" type="button">edit page</button>
       </div>
       </div><!-- /hub-pane-settings -->
 
@@ -374,6 +364,31 @@
       <h3 class="dev-note-title">clear your entire task list?</h3>
       <button class="friends-btn" id="clear-tasks-no" type="button">no, keep it</button>
       <button class="friends-btn friends-btn-secondary" id="clear-tasks-yes" type="button">yes, clear everything</button>
+    </div>
+  </div>
+
+  <!-- draggable page-edit menu (desktop, edit mode only) -->
+  <div class="dt-edit-menu hidden" id="dt-edit-menu">
+    <div class="dt-edit-header" id="dt-edit-drag">
+      <span class="dt-edit-title">edit page</span>
+      <button class="dt-edit-done" id="dt-edit-done" type="button">done</button>
+    </div>
+    <div class="dt-edit-body">
+      <div class="dt-edit-label">colors</div>
+      <div class="dt-edit-swatches">
+        <label class="dt-swatch"><input type="color" id="pe-clock" /><span>clock</span></label>
+        <label class="dt-swatch"><input type="color" id="pe-primary" /><span>primary</span></label>
+        <label class="dt-swatch"><input type="color" id="pe-secondary" /><span>secondary</span></label>
+        <label class="dt-swatch"><input type="color" id="pe-bg" /><span>background</span></label>
+      </div>
+      <button class="dt-edit-reset" id="pe-reset-colors" type="button">reset colors</button>
+      <div class="dt-edit-label">text</div>
+      <div class="dt-edit-text">
+        <button class="dt-fmt" id="fmt-bold" type="button" title="bold"><b>B</b></button>
+        <button class="dt-fmt" id="fmt-italic" type="button" title="italic"><i>I</i></button>
+        <label class="dt-fmt dt-fmt-color" title="text color"><span>A</span><input type="color" id="fmt-color" /></label>
+      </div>
+      <div class="dt-edit-hint" id="dt-edit-hint">highlight text (title / habits) to format it</div>
     </div>
   </div>
 
