@@ -4380,12 +4380,13 @@ function loadDeviceStyle() {
         richText: s.richText && typeof s.richText === "object" ? s.richText : {},
         menuPos: s.menuPos || null,
         widgets: s.widgets && typeof s.widgets === "object" ? s.widgets : null,
+        widgetStyles: s.widgetStyles && typeof s.widgetStyles === "object" ? s.widgetStyles : {},
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {} };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -5135,6 +5136,7 @@ function initEditMenu() {
         .querySelectorAll(".dt-edit-body[data-epane]")
         .forEach((p) => p.classList.toggle("hidden", p.dataset.epane !== name));
       if (name === "widgets") renderWidgetList();
+      if (name === "colors") renderWidgetColors();
     });
   });
   renderWidgetList();
@@ -5195,10 +5197,67 @@ function applyWidgets() {
     if (el) rightCol.appendChild(el);
   }
   applyPageLayout(); // re-clamp resized items to their (possibly new) column
+  applyWidgetStyles();
   // the custom player needs (re)rendering when it appears
   if (typeof renderSpotifyPlayer === "function" && document.getElementById("dt-splayer")) {
     renderSpotifyPlayer();
     if (spotifyAuth && splayerVisible()) refreshSpotifyPlayer();
+  }
+}
+
+// ---- per-widget colors + glassmorphism (from the "colors" tab, per-device) ----
+function widgetStyleOf(id) {
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
+  return { bg: ws.bg || null, text: ws.text || null, glass: !!ws.glass };
+}
+
+function applyWidgetStyles() {
+  for (const id of WIDGET_IDS) {
+    const el = widgetEl(id);
+    if (!el) continue;
+    const s = widgetStyleOf(id);
+    if (s.bg) el.style.setProperty("--wbg", s.bg);
+    else el.style.removeProperty("--wbg");
+    if (s.text) el.style.setProperty("--wtext", s.text);
+    else el.style.removeProperty("--wtext");
+    el.classList.toggle("w-tint", !!s.bg && !s.glass);
+    el.classList.toggle("w-text", !!s.text);
+    el.classList.toggle("widget-glass", s.glass);
+  }
+}
+
+function renderWidgetColors() {
+  const el = document.getElementById("dt-widget-colors");
+  if (!el) return;
+  el.innerHTML = "";
+  const present = WIDGET_IDS.filter((id) => widgetPresent(id));
+  if (!present.length) {
+    el.innerHTML = '<div class="dt-edit-hint">add a widget first to color it</div>';
+    return;
+  }
+  for (const id of present) {
+    const s = widgetStyleOf(id);
+    const section = document.createElement("div");
+    section.className = "dt-widget-color";
+    section.innerHTML =
+      `<div class="dt-wc-name">${WIDGET_NAMES[id]}</div>` +
+      '<div class="dt-wc-row">' +
+      `<label class="dt-wc-swatch"><input type="color" data-wcprop="bg" value="${s.bg || "#ffffff"}" /><span>fill</span></label>` +
+      `<label class="dt-wc-swatch"><input type="color" data-wcprop="text" value="${s.text || "#ffffff"}" /><span>text</span></label>` +
+      `<label class="dt-wc-glass"><input type="checkbox" data-wcprop="glass"${s.glass ? " checked" : ""} /><span>glass</span></label>` +
+      "</div>";
+    section.querySelectorAll("[data-wcprop]").forEach((input) => {
+      const prop = input.dataset.wcprop;
+      input.addEventListener("input", () => {
+        deviceStyle.widgetStyles = deviceStyle.widgetStyles || {};
+        const cur = deviceStyle.widgetStyles[id] || {};
+        cur[prop] = prop === "glass" ? input.checked : input.value;
+        deviceStyle.widgetStyles[id] = cur;
+        saveDeviceStyle();
+        applyWidgetStyles();
+      });
+    });
+    el.appendChild(section);
   }
 }
 
@@ -5229,6 +5288,7 @@ function toggleWidget(id) {
   saveWidgetOrder(o);
   applyWidgets();
   renderWidgetList();
+  renderWidgetColors();
 }
 
 function initWidgetDrag() {
