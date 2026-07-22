@@ -4119,12 +4119,13 @@ function loadDeviceStyle() {
         colors: s.colors && typeof s.colors === "object" ? s.colors : {},
         richText: s.richText && typeof s.richText === "object" ? s.richText : {},
         menuPos: s.menuPos || null,
+        widgets: s.widgets && typeof s.widgets === "object" ? s.widgets : null,
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -4226,7 +4227,10 @@ function fixItemOverlaps() {
   if (!document.getElementById("dt-root")) return;
   const cols = document.querySelectorAll(".dt-tasks-col, .dt-mid-col, .dt-right-col");
   cols.forEach((col) => {
-    const kids = [...col.children];
+    // ignore hidden widgets / the transient drop line so measurements are clean
+    const kids = [...col.children].filter(
+      (el) => el.offsetParent !== null && !el.classList.contains("dt-widget-drop")
+    );
     // clear previous corrections first so we measure the natural layout
     kids.forEach((el) => (el.style.marginTop = ""));
     for (let i = 1; i < kids.length; i++) {
@@ -4861,6 +4865,170 @@ function initEditMenu() {
     if (cap) editFmtRange = cap;
     updateFmtSelectionUI();
   });
+
+  // style / widgets tabs
+  document.querySelectorAll(".dt-edit-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.dataset.etab;
+      document.querySelectorAll(".dt-edit-tab").forEach((t) => t.classList.toggle("active", t === tab));
+      document
+        .querySelectorAll(".dt-edit-body[data-epane]")
+        .forEach((p) => p.classList.toggle("hidden", p.dataset.epane !== name));
+      if (name === "widgets") renderWidgetList();
+    });
+  });
+  renderWidgetList();
+  initWidgetDrag();
+}
+
+// ==========================================================================
+// Widgets: the clock / habit tracker / spotify player / pokepark are wrapped in
+// draggable cards that can be toggled on/off from the edit menu and dragged
+// between the middle and right columns (per-device placement).
+// ==========================================================================
+const WIDGET_IDS = ["clock", "habit", "spotify", "pokepark"];
+const WIDGET_NAMES = {
+  clock: "clock",
+  habit: "habit tracker",
+  spotify: "spotify player",
+  pokepark: "pokepark",
+};
+const DEFAULT_WIDGET_ORDER = { mid: ["clock", "habit"], right: ["spotify", "pokepark"] };
+
+function widgetOrder() {
+  const w = deviceStyle.widgets;
+  if (w && w.order && Array.isArray(w.order.mid) && Array.isArray(w.order.right)) {
+    return { mid: w.order.mid.slice(), right: w.order.right.slice() };
+  }
+  return { mid: DEFAULT_WIDGET_ORDER.mid.slice(), right: DEFAULT_WIDGET_ORDER.right.slice() };
+}
+function saveWidgetOrder(order) {
+  deviceStyle.widgets = { order };
+  saveDeviceStyle();
+}
+function widgetPresent(id) {
+  const o = widgetOrder();
+  return o.mid.includes(id) || o.right.includes(id);
+}
+function widgetEl(id) {
+  return document.querySelector('.dt-widget[data-widget="' + id + '"]');
+}
+
+// Arrange the widget cards into the two columns per the saved order; hide any
+// that aren't placed.
+function applyWidgets() {
+  const midCol = document.getElementById("dt-mid-col");
+  const rightCol = document.getElementById("dt-right-col");
+  if (!midCol || !rightCol) return;
+  const o = widgetOrder();
+  for (const id of WIDGET_IDS) {
+    const el = widgetEl(id);
+    if (el) el.classList.toggle("widget-off", !(o.mid.includes(id) || o.right.includes(id)));
+  }
+  for (const id of o.mid) {
+    const el = widgetEl(id);
+    if (el) midCol.appendChild(el);
+  }
+  for (const id of o.right) {
+    const el = widgetEl(id);
+    if (el) rightCol.appendChild(el);
+  }
+  applyPageLayout(); // re-clamp resized items to their (possibly new) column
+}
+
+function renderWidgetList() {
+  const el = document.getElementById("dt-widget-list");
+  if (!el) return;
+  el.innerHTML = "";
+  for (const id of WIDGET_IDS) {
+    const on = widgetPresent(id);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "dt-widget-toggle" + (on ? " on" : "");
+    btn.innerHTML =
+      "<span>" + WIDGET_NAMES[id] + '</span><span class="wt-check">' + (on ? "✓" : "+") + "</span>";
+    btn.addEventListener("click", () => toggleWidget(id));
+    el.appendChild(btn);
+  }
+}
+
+function toggleWidget(id) {
+  const o = widgetOrder();
+  if (o.mid.includes(id) || o.right.includes(id)) {
+    o.mid = o.mid.filter((x) => x !== id);
+    o.right = o.right.filter((x) => x !== id);
+  } else {
+    o.mid.unshift(id); // added widgets land in the top-leftmost spot
+  }
+  saveWidgetOrder(o);
+  applyWidgets();
+  renderWidgetList();
+}
+
+function initWidgetDrag() {
+  document.querySelectorAll(".dt-widget-grip").forEach((grip) => {
+    grip.addEventListener("pointerdown", (e) => startWidgetDrag(e, grip.closest(".dt-widget")));
+  });
+}
+
+// Which column + index the widget would drop into for a given cursor point.
+function computeWidgetDrop(x, y, dragEl) {
+  const midCol = document.getElementById("dt-mid-col");
+  const rightCol = document.getElementById("dt-right-col");
+  const rightR = rightCol.getBoundingClientRect();
+  const colEl = x >= rightR.left ? rightCol : midCol; // only mid / right are drop zones
+  const col = colEl === rightCol ? "right" : "mid";
+  const kids = [...colEl.querySelectorAll(":scope > .dt-widget")].filter(
+    (w) => w !== dragEl && !w.classList.contains("widget-off")
+  );
+  let index = kids.length;
+  for (let i = 0; i < kids.length; i++) {
+    const r = kids[i].getBoundingClientRect();
+    if (y < r.top + r.height / 2) {
+      index = i;
+      break;
+    }
+  }
+  return { col, colEl, index, kids };
+}
+
+function startWidgetDrag(startEvent, widget) {
+  if (!pageEditMode || !widget) return;
+  startEvent.preventDefault();
+  const ghost = document.createElement("div");
+  ghost.className = "dt-widget-ghost";
+  ghost.textContent = WIDGET_NAMES[widget.dataset.widget] || "widget";
+  document.body.appendChild(ghost);
+  const drop = document.createElement("div");
+  drop.className = "dt-widget-drop";
+  widget.classList.add("dragging");
+
+  const place = (x, y) => {
+    ghost.style.left = x + "px";
+    ghost.style.top = y + "px";
+    const t = computeWidgetDrop(x, y, widget);
+    if (t.index >= t.kids.length) t.colEl.appendChild(drop);
+    else t.colEl.insertBefore(drop, t.kids[t.index]);
+  };
+  place(startEvent.clientX, startEvent.clientY);
+
+  pageDrag(
+    startEvent,
+    (dx, dy) => place(startEvent.clientX + dx, startEvent.clientY + dy),
+    () => {
+      if (drop.parentElement) drop.parentElement.insertBefore(widget, drop);
+      drop.remove();
+      ghost.remove();
+      widget.classList.remove("dragging");
+      const midCol = document.getElementById("dt-mid-col");
+      const rightCol = document.getElementById("dt-right-col");
+      saveWidgetOrder({
+        mid: [...midCol.querySelectorAll(":scope > .dt-widget:not(.widget-off)")].map((w) => w.dataset.widget),
+        right: [...rightCol.querySelectorAll(":scope > .dt-widget:not(.widget-off)")].map((w) => w.dataset.widget),
+      });
+      fixItemOverlaps();
+    }
+  );
 }
 
 // Downscale a picked banner so its data URL stays small enough to sync.
@@ -5600,6 +5768,7 @@ function buildDesktop() {
   applyEditability(); // title/habit labels start locked unless edit mode is on
   initSpotify();
   initEditMenu();
+  applyWidgets(); // place / hide widget cards per this device's saved layout
 
   // one-time migration: adopt any previously-synced page-edit colors as this
   // device's local colors (colors are per-device now, no longer synced)

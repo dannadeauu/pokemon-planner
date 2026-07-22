@@ -53,33 +53,45 @@
         <div class="dt-tasks" id="dt-tasks-slot"></div>
       </div>
 
-      <div class="dt-mid-col">
-        <div class="dt-clock">
-          <div class="dt-clock-box"><span class="dt-ampm" id="dt-clock-ampm">AM</span><span id="dt-clock-h">--</span></div>
-          <div class="dt-clock-box"><span id="dt-clock-m">--</span></div>
-        </div>
-        <h2 class="dt-h2">habit tracker</h2>
-        <div class="dt-box dt-habit-box" id="dt-habit-box">
-          <div class="habit-week" id="habit-week"></div>
-          <div class="habit-month" id="habit-month"></div>
-        </div>
-        <div class="habit-checks" id="habit-checks"></div>
-      </div>
-
-      <div class="dt-right-col">
-        <div class="dt-embed" id="dt-embed">
-          <div class="dt-embed-frame" id="dt-embed-frame"></div>
-          <div class="dt-embed-controls" id="dt-embed-controls">
-            <button class="dt-embed-edit" id="dt-embed-edit" type="button">set spotify link</button>
-            <button class="dt-embed-edit" id="dt-spotify-connect" type="button">connect spotify</button>
+      <div class="dt-mid-col dt-widget-col" id="dt-mid-col">
+        <div class="dt-widget" data-widget="clock">
+          <div class="dt-widget-grip" title="drag widget"></div>
+          <div class="dt-clock">
+            <div class="dt-clock-box"><span class="dt-ampm" id="dt-clock-ampm">AM</span><span id="dt-clock-h">--</span></div>
+            <div class="dt-clock-box"><span id="dt-clock-m">--</span></div>
           </div>
         </div>
-        <div class="dt-spotify hidden" id="dt-spotify">
-          <div class="dt-now-playing" id="dt-now-playing"></div>
-          <div class="dt-playlists" id="dt-playlists"></div>
+        <div class="dt-widget" data-widget="habit">
+          <div class="dt-widget-grip" title="drag widget"></div>
+          <h2 class="dt-h2">habit tracker</h2>
+          <div class="dt-box dt-habit-box" id="dt-habit-box">
+            <div class="habit-week" id="habit-week"></div>
+            <div class="habit-month" id="habit-month"></div>
+          </div>
+          <div class="habit-checks" id="habit-checks"></div>
         </div>
-        <h2 class="dt-h2">pokepark</h2>
-        <div class="dt-box dt-park-box" id="dt-park-slot"></div>
+      </div>
+
+      <div class="dt-right-col dt-widget-col" id="dt-right-col">
+        <div class="dt-widget" data-widget="spotify">
+          <div class="dt-widget-grip" title="drag widget"></div>
+          <div class="dt-embed" id="dt-embed">
+            <div class="dt-embed-frame" id="dt-embed-frame"></div>
+            <div class="dt-embed-controls" id="dt-embed-controls">
+              <button class="dt-embed-edit" id="dt-embed-edit" type="button">set spotify link</button>
+              <button class="dt-embed-edit" id="dt-spotify-connect" type="button">connect spotify</button>
+            </div>
+          </div>
+          <div class="dt-spotify hidden" id="dt-spotify">
+            <div class="dt-now-playing" id="dt-now-playing"></div>
+            <div class="dt-playlists" id="dt-playlists"></div>
+          </div>
+        </div>
+        <div class="dt-widget" data-widget="pokepark">
+          <div class="dt-widget-grip" title="drag widget"></div>
+          <h2 class="dt-h2">pokepark</h2>
+          <div class="dt-box dt-park-box" id="dt-park-slot"></div>
+        </div>
       </div>
     </div>
 
@@ -373,7 +385,11 @@
       <span class="dt-edit-title">edit page</span>
       <button class="dt-edit-done" id="dt-edit-done" type="button">done</button>
     </div>
-    <div class="dt-edit-body">
+    <div class="dt-edit-tabs">
+      <button class="dt-edit-tab active" data-etab="style" type="button">style</button>
+      <button class="dt-edit-tab" data-etab="widgets" type="button">widgets</button>
+    </div>
+    <div class="dt-edit-body" data-epane="style">
       <div class="dt-edit-label">colors</div>
       <div class="dt-edit-swatches">
         <label class="dt-swatch"><input type="color" id="pe-clock" /><span>clock</span></label>
@@ -389,6 +405,11 @@
         <label class="dt-fmt dt-fmt-color" title="text color"><span>A</span><input type="color" id="fmt-color" /></label>
       </div>
       <div class="dt-edit-hint" id="dt-edit-hint">highlight text (title / habits) to format it</div>
+    </div>
+    <div class="dt-edit-body hidden" data-epane="widgets">
+      <div class="dt-edit-label">widgets on your page</div>
+      <div class="dt-widget-list" id="dt-widget-list"></div>
+      <div class="dt-edit-hint">click to add / remove · drag the grip on a widget to move it</div>
     </div>
   </div>
 

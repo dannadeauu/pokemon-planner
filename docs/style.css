@@ -3056,7 +3056,128 @@ body.theme-dark .dex-cell.undiscovered img {
     color: var(--muted);
     font-weight: 600;
   }
-  .dt-edit-menu:not(.no-selection) .dt-edit-hint {
+  .dt-edit-menu:not(.no-selection) #dt-edit-hint {
     display: none;
+  }
+
+  /* ---- edit menu tabs (style / widgets) ---- */
+  .dt-edit-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 10px 0;
+  }
+  .dt-edit-tab {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 7px 8px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+  }
+  .dt-edit-tab.active {
+    color: var(--text);
+    background: var(--input-bg);
+  }
+  .dt-edit-body.hidden {
+    display: none;
+  }
+  .dt-widget-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dt-widget-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .dt-widget-toggle.on {
+    background: var(--color-add);
+    color: #fff;
+    border-color: var(--color-add);
+  }
+  .dt-widget-toggle .wt-check {
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  /* ---- draggable widgets ---- */
+  .dt-widget {
+    position: relative;
+  }
+  .dt-widget.widget-off {
+    display: none;
+  }
+  .dt-widget-grip {
+    display: none;
+  }
+  .dt-root.dt-editing .dt-widget {
+    padding-top: 18px;
+    outline: 1px dashed rgba(127, 127, 127, 0.4);
+    outline-offset: 5px;
+    border-radius: 8px;
+  }
+  .dt-root.dt-editing .dt-widget-grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 15px;
+    background: var(--color-add);
+    border-radius: 8px;
+    cursor: grab;
+    touch-action: none;
+    z-index: 45;
+  }
+  .dt-root.dt-editing .dt-widget-grip::before {
+    content: "";
+    width: 30px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .dt-widget-grip:active {
+    cursor: grabbing;
+  }
+  .dt-widget.dragging {
+    opacity: 0.3;
+  }
+  .dt-widget-ghost {
+    position: fixed;
+    z-index: 200;
+    pointer-events: none;
+    background: var(--color-add);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 8px 14px;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+  }
+  .dt-widget-drop {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-add);
+    margin: 6px 0;
+    box-shadow: 0 0 0 1px var(--color-add);
   }
 }
