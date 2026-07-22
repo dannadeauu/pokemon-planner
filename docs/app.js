@@ -4659,6 +4659,7 @@ function applyEditability() {
 
 function setPageEdit(on) {
   pageEditMode = on;
+  editFmtRange = null;
   const root = document.getElementById("dt-root");
   if (!root) return;
   root.classList.toggle("dt-editing", on);
