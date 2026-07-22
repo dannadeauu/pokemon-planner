@@ -4109,8 +4109,9 @@ function renderSpotifyPlayer() {
     ? '<div class="sp-lyrics"><div class="sp-lyric sp-current"></div><div class="sp-lyric"></div><div class="sp-lyric"></div></div>'
     : '<div class="sp-lyrics"><div class="sp-lyrics-none">no synced lyrics found</div></div>';
   el.innerHTML =
-    `<div class="sp-label">${label}</div>` +
     '<div class="sp-top">' +
+    `<div class="sp-label">${label}</div>` +
+    '<div class="sp-top-row">' +
     (art ? `<img class="sp-art" src="${art}" alt="" />` : '<div class="sp-art sp-noart"></div>') +
     '<div class="sp-main">' +
     `<div class="sp-track"><div class="sp-title">${calEsc(t.name)}</div><div class="sp-artist">${calEsc(artists)}</div></div>` +
@@ -4121,6 +4122,7 @@ function renderSpotifyPlayer() {
     `<button class="sp-btn sp-play" data-act="playpause" title="play / pause">${splayerIcon(playIcon)}</button>` +
     `<button class="sp-btn" data-act="next" title="next">${splayerIcon("next")}</button>` +
     `<button class="sp-btn" data-act="minus" title="remove from liked">${splayerIcon("minus")}</button>` +
+    "</div>" +
     "</div>" +
     "</div>" +
     "</div>" +
