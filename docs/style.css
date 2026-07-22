@@ -3312,25 +3312,25 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .sp-bottom {
     background: var(--sp-bottom);
-    padding: 18px 20px;
+    padding: 16px 18px;
     display: flex;
-    gap: 18px;
+    gap: 12px;
     align-items: flex-start;
     justify-content: space-between; /* lyrics left, covers right */
     flex-wrap: wrap;
   }
   .sp-lyrics {
-    flex: 1 1 230px;
+    flex: 1 1 150px;
     /* keep the words box narrow so longer lines wrap onto 2 lines and the
-       albums still fit beside it on one row around ~820px */
-    max-width: 290px;
+       albums still fit beside it on one row from ~410px up */
+    max-width: 210px;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 7px;
   }
   .sp-lyric {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
     line-height: 1.2;
     color: #fff;
@@ -3349,11 +3349,11 @@ body.theme-dark .dex-cell.undiscovered img {
   .sp-albums {
     flex: 0 0 auto;
     display: flex;
-    gap: 12px;
+    gap: 8px;
   }
   .sp-album {
-    width: 80px;
-    height: 80px;
+    width: 58px;
+    height: 58px;
     border-radius: 8px;
     object-fit: cover;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
