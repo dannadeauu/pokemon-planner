@@ -3681,7 +3681,8 @@ const SPOTIFY_CLIENT_KEY = "spotify-client-id";
 const SPOTIFY_AUTH_KEY = "spotify-auth";
 const SPOTIFY_VERIFIER_KEY = "spotify-pkce-verifier";
 const SPOTIFY_SCOPES =
-  "user-read-currently-playing user-read-playback-state playlist-read-private";
+  "user-read-currently-playing user-read-playback-state user-read-recently-played " +
+  "user-modify-playback-state user-library-read user-library-modify playlist-read-private";
 
 function spotifyRedirectUri() {
   return location.origin + location.pathname;
@@ -3810,13 +3811,21 @@ async function ensureSpotifyToken() {
 }
 
 async function spotifyApi(path) {
+  return spotifyReq(path, "GET");
+}
+
+// General Spotify request (GET reads + POST/PUT/DELETE playback & library actions).
+async function spotifyReq(path, method, body) {
   const token = await ensureSpotifyToken();
   if (!token) return null;
+  const opts = { method: method || "GET", headers: { Authorization: "Bearer " + token } };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
   let res;
   try {
-    res = await fetch("https://api.spotify.com/v1" + path, {
-      headers: { Authorization: "Bearer " + token },
-    });
+    res = await fetch("https://api.spotify.com/v1" + path, opts);
   } catch (e) {
     return null;
   }
@@ -3825,14 +3834,16 @@ async function spotifyApi(path) {
     return null;
   }
   if (res.status === 204) return { empty: true };
-  if (!res.ok) return null;
-  return res.json();
+  if (!res.ok) return { error: res.status };
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : {};
 }
 
 function spotifyDisconnect() {
   spotifyAuth = null;
   saveSpotifyAuth();
   renderSpotifyPanel();
+  renderSpotifyPlayer();
 }
 
 async function refreshSpotifyNowPlaying() {
@@ -3894,6 +3905,249 @@ function renderSpotifyPanel() {
   }
 }
 
+// ---- custom spotify player widget: now playing / last played, live controls,
+// 3 recent albums, and time-synced lyrics (lyrics from lrclib.net) ----
+const splayer = {
+  track: null, isLast: false, isPlaying: false,
+  progressMs: 0, durationMs: 0, fetchedAt: 0,
+  liked: false, lyrics: null, lyricsKey: "", albums: [],
+};
+let splayerTick = null;
+
+function splayerVisible() {
+  const el = document.getElementById("dt-splayer");
+  return !!(el && el.offsetParent !== null);
+}
+
+function parseLrc(lrc) {
+  const out = [];
+  for (const line of (lrc || "").split("\n")) {
+    const m = line.match(/^\[(\d+):(\d+)(?:[.:](\d+))?\]\s*(.*)$/);
+    if (!m) continue;
+    const frac = m[3] ? Number("0." + m[3]) : 0;
+    out.push({ time: (Number(m[1]) * 60 + Number(m[2]) + frac) * 1000, text: m[4].trim() });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+async function loadSplayerLyrics(track) {
+  if (!track) {
+    splayer.lyrics = null;
+    splayer.lyricsKey = "";
+    return;
+  }
+  if (splayer.lyricsKey === track.id) return; // already loaded for this track
+  splayer.lyricsKey = track.id;
+  splayer.lyrics = null;
+  const artist = (track.artists && track.artists[0] && track.artists[0].name) || "";
+  try {
+    let synced = null;
+    // exact match first (artist + track + album + duration)
+    const getRes = await fetch(
+      "https://lrclib.net/api/get?" +
+        new URLSearchParams({
+          track_name: track.name || "",
+          artist_name: artist,
+          album_name: (track.album && track.album.name) || "",
+          duration: String(Math.round((track.duration_ms || 0) / 1000)),
+        })
+    );
+    if (getRes.ok) {
+      const d = await getRes.json();
+      if (d && d.syncedLyrics) synced = d.syncedLyrics;
+    }
+    // fuzzy search fallback if the strict lookup misses
+    if (!synced) {
+      const sRes = await fetch(
+        "https://lrclib.net/api/search?" +
+          new URLSearchParams({ track_name: track.name || "", artist_name: artist })
+      );
+      if (sRes.ok) {
+        const arr = await sRes.json();
+        const hit = Array.isArray(arr) ? arr.find((x) => x.syncedLyrics) : null;
+        if (hit) synced = hit.syncedLyrics;
+      }
+    }
+    if (splayer.lyricsKey === track.id && synced) splayer.lyrics = parseLrc(synced);
+  } catch (e) {
+    // no lyrics available for this track
+  }
+}
+
+async function refreshSpotifyPlayer() {
+  if (!splayerVisible() || !spotifyAuth) return;
+  const np = await spotifyApi("/me/player/currently-playing");
+  let track = null, isPlaying = false, progressMs = 0, isLast = false;
+  if (np && !np.empty && !np.error && np.item) {
+    track = np.item;
+    isPlaying = !!np.is_playing;
+    progressMs = np.progress_ms || 0;
+  } else {
+    const recent = await spotifyApi("/me/player/recently-played?limit=1");
+    if (recent && recent.items && recent.items[0]) {
+      track = recent.items[0].track;
+      isLast = true;
+    }
+  }
+  splayer.track = track;
+  splayer.isPlaying = isPlaying;
+  splayer.isLast = isLast;
+  splayer.progressMs = progressMs;
+  splayer.durationMs = track ? track.duration_ms : 0;
+  splayer.fetchedAt = Date.now();
+
+  if (track) {
+    const liked = await spotifyApi("/me/tracks/contains?ids=" + track.id);
+    splayer.liked = Array.isArray(liked) ? !!liked[0] : false;
+  }
+  // three most-recent distinct albums
+  const rp = await spotifyApi("/me/player/recently-played?limit=50");
+  const albums = [];
+  if (rp && rp.items) {
+    const seen = new Set();
+    for (const it of rp.items) {
+      const al = it.track && it.track.album;
+      if (al && !seen.has(al.id)) {
+        seen.add(al.id);
+        albums.push(al);
+      }
+      if (albums.length >= 3) break;
+    }
+  }
+  splayer.albums = albums;
+  await loadSplayerLyrics(track);
+  renderSpotifyPlayer();
+  startSplayerTick();
+}
+
+function splayerCurrentMs() {
+  return splayer.isPlaying ? splayer.progressMs + (Date.now() - splayer.fetchedAt) : splayer.progressMs;
+}
+
+function updateSplayerProgress() {
+  const el = document.getElementById("dt-splayer");
+  if (!el || !splayer.track) return;
+  const dur = splayer.durationMs || 1;
+  const p = Math.min(splayerCurrentMs(), dur);
+  const pct = Math.max(0, Math.min(100, (p / dur) * 100));
+  const fill = el.querySelector(".sp-bar-fill");
+  const dot = el.querySelector(".sp-bar-dot");
+  if (fill) fill.style.width = pct + "%";
+  if (dot) dot.style.left = pct + "%";
+  const lines = el.querySelectorAll(".sp-lyric");
+  if (splayer.lyrics && splayer.lyrics.length && lines.length) {
+    let idx = 0;
+    for (let i = 0; i < splayer.lyrics.length; i++) {
+      if (splayer.lyrics[i].time <= p) idx = i;
+      else break;
+    }
+    for (let k = 0; k < lines.length; k++) {
+      const l = splayer.lyrics[idx + k];
+      lines[k].textContent = l ? l.text : "";
+      lines[k].classList.toggle("sp-current", k === 0);
+    }
+  }
+}
+
+function startSplayerTick() {
+  if (splayerTick) return;
+  splayerTick = setInterval(() => {
+    if (document.hidden || !splayerVisible()) return;
+    updateSplayerProgress();
+  }, 500);
+}
+
+function splayerIcon(name) {
+  if (name === "minus") {
+    return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>';
+  }
+  const paths = {
+    heart:
+      '<path d="M12 21s-7-4.35-9.5-8.5C1 9.5 2.5 6 6 6c2 0 3 1.2 4 2.5C11 7.2 12 6 14 6c3.5 0 5 3.5 3.5 6.5C19 16.65 12 21 12 21z"/>',
+    prev: '<path d="M6 6h2v12H6z"/><path d="M20 6l-11 6 11 6z"/>',
+    next: '<path d="M16 6h2v12h-2z"/><path d="M4 6l11 6-11 6z"/>',
+    play: '<path d="M8 5v14l11-7z"/>',
+    pause: '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>',
+  };
+  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">' + (paths[name] || "") + "</svg>";
+}
+
+function renderSpotifyPlayer() {
+  const el = document.getElementById("dt-splayer");
+  if (!el) return;
+  if (!spotifyAuth) {
+    el.innerHTML =
+      '<div class="sp-connect"><div class="sp-label" style="margin-bottom:10px">spotify player</div>' +
+      '<button type="button" id="sp-connect-btn">connect spotify</button></div>';
+    const b = document.getElementById("sp-connect-btn");
+    if (b) b.addEventListener("click", () => spotifyConnect());
+    return;
+  }
+  const t = splayer.track;
+  if (!t) {
+    el.innerHTML =
+      '<div class="sp-label">now playing:</div><div class="sp-lyrics-none">play something on spotify to see it here</div>';
+    return;
+  }
+  const art = t.album && t.album.images && t.album.images[0] ? t.album.images[0].url : "";
+  const artists = (t.artists || []).map((a) => a.name).join(", ");
+  const label = splayer.isLast ? "last played:" : "now playing:";
+  const playIcon = splayer.isPlaying ? "pause" : "play";
+  const albumsHtml = splayer.albums
+    .map((al) => {
+      const img = al.images && al.images[0] ? al.images[0].url : "";
+      const url = (al.external_urls && al.external_urls.spotify) || "#";
+      return (
+        `<a href="${url}" target="_blank" rel="noopener" title="${calEsc(al.name)}">` +
+        (img ? `<img class="sp-album" src="${img}" alt="" />` : '<div class="sp-album sp-noart"></div>') +
+        "</a>"
+      );
+    })
+    .join("");
+  const hasLyrics = splayer.lyrics && splayer.lyrics.length;
+  const lyricsHtml = hasLyrics
+    ? '<div class="sp-lyrics"><div class="sp-lyric sp-current"></div><div class="sp-lyric"></div><div class="sp-lyric"></div></div>'
+    : '<div class="sp-lyrics"><div class="sp-lyrics-none">no synced lyrics found</div></div>';
+  el.innerHTML =
+    `<div class="sp-label">${label}</div>` +
+    '<div class="sp-top">' +
+    (art ? `<img class="sp-art" src="${art}" alt="" />` : '<div class="sp-art sp-noart"></div>') +
+    '<div class="sp-main">' +
+    `<div class="sp-track"><div class="sp-title">${calEsc(t.name)}</div><div class="sp-artist">${calEsc(artists)}</div></div>` +
+    '<div class="sp-bar"><div class="sp-bar-fill"></div><div class="sp-bar-dot"></div></div>' +
+    '<div class="sp-controls">' +
+    `<button class="sp-btn sp-heart${splayer.liked ? " sp-liked" : ""}" data-act="like" title="save to liked">${splayerIcon("heart")}</button>` +
+    `<button class="sp-btn" data-act="prev" title="previous">${splayerIcon("prev")}</button>` +
+    `<button class="sp-btn sp-play" data-act="playpause" title="play / pause">${splayerIcon(playIcon)}</button>` +
+    `<button class="sp-btn" data-act="next" title="next">${splayerIcon("next")}</button>` +
+    `<button class="sp-btn" data-act="minus" title="remove from liked">${splayerIcon("minus")}</button>` +
+    "</div>" +
+    "</div>" +
+    "</div>" +
+    `<div class="sp-bottom">${lyricsHtml}<div class="sp-albums">${albumsHtml}</div></div>`;
+  el.querySelectorAll(".sp-btn").forEach((btn) => {
+    btn.addEventListener("click", () => splayerControl(btn.dataset.act));
+  });
+  updateSplayerProgress();
+}
+
+async function splayerControl(act) {
+  const t = splayer.track;
+  if (!t) return;
+  if (act === "like" || act === "minus") {
+    const like = act === "like" && !splayer.liked;
+    await spotifyReq("/me/tracks?ids=" + t.id, like ? "PUT" : "DELETE");
+    splayer.liked = like;
+    renderSpotifyPlayer();
+    return;
+  }
+  if (act === "prev") await spotifyReq("/me/player/previous", "POST");
+  else if (act === "next") await spotifyReq("/me/player/next", "POST");
+  else if (act === "playpause")
+    await spotifyReq(splayer.isPlaying ? "/me/player/pause" : "/me/player/play", "PUT");
+  setTimeout(refreshSpotifyPlayer, 350); // let Spotify apply, then re-sync
+}
+
 // Wire the connect/disconnect button + initialize (desktop only).
 function initSpotify() {
   const connectBtn = document.getElementById("dt-spotify-connect");
@@ -3906,11 +4160,15 @@ function initSpotify() {
   (async () => {
     await handleSpotifyRedirect();
     renderSpotifyPanel();
+    renderSpotifyPlayer();
+    refreshSpotifyPlayer();
   })();
-  // keep "now playing" current while the tab is visible
+  // keep now-playing + the custom player current while the tab is visible
   setInterval(() => {
-    if (!document.hidden && spotifyAuth) refreshSpotifyNowPlaying();
-  }, 20000);
+    if (document.hidden || !spotifyAuth) return;
+    refreshSpotifyNowPlaying();
+    if (splayerVisible()) refreshSpotifyPlayer();
+  }, 15000);
 }
 
 // Render the title: use this device's saved rich (formatted) version when its
@@ -4886,11 +5144,12 @@ function initEditMenu() {
 // draggable cards that can be toggled on/off from the edit menu and dragged
 // between the middle and right columns (per-device placement).
 // ==========================================================================
-const WIDGET_IDS = ["clock", "habit", "spotify", "pokepark"];
+const WIDGET_IDS = ["clock", "habit", "spotify", "spotify2", "pokepark"];
 const WIDGET_NAMES = {
   clock: "clock",
   habit: "habit tracker",
-  spotify: "spotify player",
+  spotify: "spotify embed",
+  spotify2: "spotify player",
   pokepark: "pokepark",
 };
 const DEFAULT_WIDGET_ORDER = { mid: ["clock", "habit"], right: ["spotify", "pokepark"] };
@@ -4934,6 +5193,11 @@ function applyWidgets() {
     if (el) rightCol.appendChild(el);
   }
   applyPageLayout(); // re-clamp resized items to their (possibly new) column
+  // the custom player needs (re)rendering when it appears
+  if (typeof renderSpotifyPlayer === "function" && document.getElementById("dt-splayer")) {
+    renderSpotifyPlayer();
+    if (spotifyAuth && splayerVisible()) refreshSpotifyPlayer();
+  }
 }
 
 function renderWidgetList() {
