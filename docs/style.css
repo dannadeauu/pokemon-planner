@@ -3316,19 +3316,23 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     gap: 18px;
     align-items: flex-start;
+    justify-content: space-between; /* lyrics left, covers right */
     flex-wrap: wrap;
   }
   .sp-lyrics {
-    flex: 1 1 190px;
+    flex: 1 1 230px;
+    /* keep the words box narrow so longer lines wrap onto 2 lines and the
+       albums still fit beside it on one row around ~820px */
+    max-width: 290px;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
   .sp-lyric {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 800;
-    line-height: 1.15;
+    line-height: 1.2;
     color: #fff;
     opacity: 0.5; /* upcoming lyrics at 50% */
     transition: opacity 0.2s;
