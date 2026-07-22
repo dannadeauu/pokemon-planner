@@ -4034,17 +4034,34 @@ function updateSplayerProgress() {
   const dot = el.querySelector(".sp-bar-dot");
   if (fill) fill.style.width = pct + "%";
   if (dot) dot.style.left = pct + "%";
-  const lines = el.querySelectorAll(".sp-lyric");
-  if (splayer.lyrics && splayer.lyrics.length && lines.length) {
+  // scroll the lyrics so the current line lands in place just before it's sung
+  const scroll = el.querySelector(".sp-lyrics-scroll");
+  if (splayer.lyrics && splayer.lyrics.length && scroll) {
+    const LEAD = 450; // begin the scroll ~this long before the line is sung
     let idx = 0;
     for (let i = 0; i < splayer.lyrics.length; i++) {
-      if (splayer.lyrics[i].time <= p) idx = i;
+      if (splayer.lyrics[i].time <= p + LEAD) idx = i;
       else break;
     }
-    for (let k = 0; k < lines.length; k++) {
-      const l = splayer.lyrics[idx + k];
-      lines[k].textContent = l ? l.text : "";
-      lines[k].classList.toggle("sp-current", k === 0);
+    if (splayer._lyricIdx !== idx) {
+      const first = splayer._lyricIdx == null || splayer._lyricIdx < 0;
+      splayer._lyricIdx = idx;
+      const lines = scroll.children;
+      for (let k = 0; k < lines.length; k++) lines[k].classList.toggle("sp-current", k === idx);
+      const cur = lines[idx];
+      if (cur) {
+        // seat the current line just below the top fade
+        const y = -(cur.offsetTop - 28);
+        if (first) {
+          // no animation for the very first placement
+          scroll.style.transition = "none";
+          scroll.style.transform = `translateY(${y}px)`;
+          void scroll.offsetWidth;
+          scroll.style.transition = "";
+        } else {
+          scroll.style.transform = `translateY(${y}px)`;
+        }
+      }
     }
   }
 }
@@ -4054,7 +4071,7 @@ function startSplayerTick() {
   splayerTick = setInterval(() => {
     if (document.hidden || !splayerVisible()) return;
     updateSplayerProgress();
-  }, 500);
+  }, 250);
 }
 
 function splayerIcon(name) {
@@ -4106,8 +4123,11 @@ function renderSpotifyPlayer() {
     .join("");
   const hasLyrics = splayer.lyrics && splayer.lyrics.length;
   const lyricsHtml = hasLyrics
-    ? '<div class="sp-lyrics"><div class="sp-lyric sp-current"></div><div class="sp-lyric"></div><div class="sp-lyric"></div></div>'
-    : '<div class="sp-lyrics"><div class="sp-lyrics-none">no synced lyrics found</div></div>';
+    ? '<div class="sp-lyrics"><div class="sp-lyrics-scroll">' +
+      splayer.lyrics.map((l) => `<div class="sp-lyric">${calEsc(l.text)}</div>`).join("") +
+      "</div></div>"
+    : '<div class="sp-lyrics sp-lyrics-empty"><div class="sp-lyrics-none">no synced lyrics found</div></div>';
+  splayer._lyricIdx = -1; // force the scroll to re-seat on the next tick
   el.innerHTML =
     '<div class="sp-top">' +
     `<div class="sp-label">${label}</div>` +

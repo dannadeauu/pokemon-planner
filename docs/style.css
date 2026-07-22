@@ -3325,17 +3325,45 @@ body.theme-dark .dex-cell.undiscovered img {
        albums still fit beside it on one row from ~410px up */
     max-width: 210px;
     min-width: 0;
+    /* a fixed viewport the lyrics scroll through, with the top & bottom fading
+       into the section background so lines slide behind a gradient */
+    height: 104px;
+    overflow: hidden;
+    position: relative;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 26%,
+      #000 72%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 26%,
+      #000 72%,
+      transparent 100%
+    );
+  }
+  .sp-lyrics-empty {
+    height: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .sp-lyrics-scroll {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 8px;
+    transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
   }
   .sp-lyric {
     font-size: 14px;
     font-weight: 800;
     line-height: 1.2;
     color: #fff;
-    opacity: 0.5; /* upcoming lyrics at 50% */
-    transition: opacity 0.2s;
+    opacity: 0.5; /* upcoming/past lyrics at 50% */
+    transition: opacity 0.3s;
   }
   .sp-lyric.sp-current {
     opacity: 1; /* current lyric at 100% */
