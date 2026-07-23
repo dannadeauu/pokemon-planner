@@ -4688,7 +4688,10 @@ function stripHtml(html) {
 // background shows the chosen end fill — a solid color, or a soft "mirage" of
 // dispersed colors sampled from the image (frosted with a grain overlay).
 // ==========================================================================
-const BG_DEFAULTS = { src: null, posX: 50, posY: 50, zoom: 100, height: 900, end: "solid", endColor: null, mirage: null };
+const BG_DEFAULTS = { src: null, posX: 50, posY: 50, zoom: 100, height: 900, end: "solid", endColor: null, mirage: null, parallax: false };
+// With "scroll with background depth" on, the background moves at this fraction
+// of the page's scroll speed (0.5 = half as fast) for a parallax effect.
+const BG_PARALLAX_FACTOR = 0.5;
 // A very dispersed rainbow fallback if we can't sample the image (e.g. a remote
 // link with no CORS): mirrors the soft blue→green→yellow→pink spread.
 const DEFAULT_MIRAGE = ["120,110,220", "96,150,214", "126,201,150", "232,214,120", "234,150,110", "225,112,162"];
@@ -4768,6 +4771,8 @@ function applyBackgroundImage() {
   const b = bgImageCfg();
   if (!b.src) {
     root.classList.remove("has-bg-image");
+    layer.style.transform = ""; // drop any parallax offset from a prior image
+    layer.style.willChange = "";
     return;
   }
   root.classList.add("has-bg-image");
@@ -4785,6 +4790,34 @@ function applyBackgroundImage() {
     const endColor = b.endColor || (deviceStyle.colors && deviceStyle.colors.bg) || getComputedStyle(document.body).backgroundColor;
     layer.style.background = endColor;
   }
+  layer.style.willChange = b.parallax ? "transform" : "";
+  updateBgParallax();
+}
+
+// Offset the background layer for the "scroll with background depth" parallax:
+// the layer scrolls with the document, so translating it DOWN by (1−factor)×
+// scroll makes it appear to move up slower than the page content. Skipped while
+// cropping (the layer is raised + dragged) and when parallax/image is off.
+function updateBgParallax() {
+  const layer = document.getElementById("dt-bg-layer");
+  const root = document.getElementById("dt-root");
+  if (!layer || !root) return;
+  const b = bgImageCfg();
+  const editing = root.classList.contains("dt-bg-editing");
+  if (!b.src || !b.parallax || editing) {
+    layer.style.transform = "";
+    return;
+  }
+  const sy = (document.scrollingElement || document.documentElement).scrollTop || 0;
+  layer.style.transform = `translateY(${((1 - BG_PARALLAX_FACTOR) * sy).toFixed(1)}px)`;
+}
+let bgParallaxRaf = 0;
+function onBgParallaxScroll() {
+  if (bgParallaxRaf) return;
+  bgParallaxRaf = requestAnimationFrame(() => {
+    bgParallaxRaf = 0;
+    updateBgParallax();
+  });
 }
 
 // Apply the saved sizes + colors to the desktop layout (idempotent).
@@ -5348,6 +5381,7 @@ function setPageEdit(on) {
     // leaving edit mode also exits any active background crop
     const root2 = document.getElementById("dt-root");
     if (root2) root2.classList.remove("dt-bg-editing");
+    updateBgParallax(); // resume the parallax offset now that cropping is off
   }
 }
 
@@ -5387,6 +5421,8 @@ function syncBgImageInputs() {
   if (zoom) zoom.value = String(b.zoom || 100);
   const height = document.getElementById("pe-bgimg-height");
   if (height) height.value = String(b.height || 900);
+  const parallax = document.getElementById("pe-bgimg-parallax");
+  if (parallax) parallax.checked = Boolean(b.parallax);
   const solid = document.getElementById("pe-bgend-solid");
   const mirage = document.getElementById("pe-bgend-mirage");
   if (solid) solid.checked = b.end !== "mirage";
@@ -5481,6 +5517,16 @@ function initBannerAndBgControls() {
     });
   }
 
+  // --- scroll with background depth (parallax) ---
+  const parallax = document.getElementById("pe-bgimg-parallax");
+  if (parallax) {
+    parallax.addEventListener("change", () => {
+      saveBgImageCfg({ parallax: parallax.checked });
+      applyBackgroundImage();
+    });
+  }
+  window.addEventListener("scroll", onBgParallaxScroll, { passive: true });
+
   // --- end-of-scroll fill: solid color vs. mirage blur ---
   const solid = document.getElementById("pe-bgend-solid");
   const mirage = document.getElementById("pe-bgend-mirage");
@@ -5503,6 +5549,7 @@ function initBannerAndBgControls() {
       const on = !root.classList.contains("dt-bg-editing");
       root.classList.toggle("dt-bg-editing", on && Boolean(bgImageCfg().src));
       repositionBtn.textContent = root.classList.contains("dt-bg-editing") ? "done cropping" : "reposition / crop";
+      updateBgParallax(); // no parallax offset while cropping; restore on exit
     });
     layer.addEventListener("pointerdown", (e) => {
       if (!root.classList.contains("dt-bg-editing") || !bgImageCfg().src) return;
