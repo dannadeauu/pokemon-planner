@@ -3305,7 +3305,6 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 50%;
     background: #fff; /* white circle */
     color: #808187; /* icon reads gray on the white circle */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
   .sp-play:hover {
     opacity: 1;

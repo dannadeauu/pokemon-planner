@@ -4205,10 +4205,24 @@ async function splayerControl(act) {
     updateSplayerHeart();
     return;
   }
+  if (act === "playpause") {
+    // Optimistic toggle: freeze/resume the local clock immediately so the
+    // widget and lyrics stop/start in lockstep with Spotify instead of coasting
+    // until the request round-trips back. Snapshot the current position first
+    // (before flipping isPlaying, which splayerCurrentMs depends on).
+    const willPlay = !splayer.isPlaying;
+    const dur = splayer.durationMs || Infinity;
+    splayer.progressMs = Math.min(splayerCurrentMs(), dur);
+    splayer.isPlaying = willPlay;
+    splayer.fetchedAt = Date.now();
+    updateSplayerPlayButton();
+    updateSplayerProgress();
+    await spotifyReq(willPlay ? "/me/player/play" : "/me/player/pause", "PUT");
+    setTimeout(refreshSpotifyPlayer, 350); // reconcile exact position with Spotify
+    return;
+  }
   if (act === "prev") await spotifyReq("/me/player/previous", "POST");
   else if (act === "next") await spotifyReq("/me/player/next", "POST");
-  else if (act === "playpause")
-    await spotifyReq(splayer.isPlaying ? "/me/player/pause" : "/me/player/play", "PUT");
   setTimeout(refreshSpotifyPlayer, 350); // let Spotify apply, then re-sync
 }
 
