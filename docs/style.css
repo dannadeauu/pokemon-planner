@@ -1811,6 +1811,10 @@ body.theme-dark .dex-cell.undiscovered img {
     flex-direction: column;
     min-width: 0;
   }
+  /* adjustable extra vertical space between stacked widgets (edit menu) */
+  .dt-widget-col {
+    row-gap: var(--dt-widget-gap, 0px);
+  }
 
   /* generic empty labelled box */
   .dt-box {
@@ -3117,6 +3121,11 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget-toggle .wt-check {
     font-size: 15px;
     font-weight: 800;
+  }
+  input[type="range"].dt-widget-gap {
+    width: 100%;
+    accent-color: var(--color-add);
+    cursor: pointer;
   }
 
   /* ---- draggable widgets ---- */

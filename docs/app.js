@@ -4626,12 +4626,13 @@ function loadDeviceStyle() {
         menuPos: s.menuPos || null,
         widgets: s.widgets && typeof s.widgets === "object" ? s.widgets : null,
         widgetStyles: s.widgetStyles && typeof s.widgetStyles === "object" ? s.widgetStyles : {},
+        widgetGap: typeof s.widgetGap === "number" ? s.widgetGap : null,
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {} };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -5386,6 +5387,19 @@ function initEditMenu() {
   });
   renderWidgetList();
   initWidgetDrag();
+
+  // spacing-between-widgets slider (widgets tab)
+  const gapSlider = document.getElementById("dt-widget-gap");
+  if (gapSlider) {
+    gapSlider.max = String(WIDGET_GAP_MAX);
+    gapSlider.value = String(widgetGap());
+    gapSlider.addEventListener("input", () => {
+      deviceStyle.widgetGap = parseInt(gapSlider.value, 10) || 0;
+      saveDeviceStyle();
+      applyWidgetGap();
+      fixItemOverlaps();
+    });
+  }
 }
 
 // ==========================================================================
@@ -5442,6 +5456,7 @@ function applyWidgets() {
     if (el) rightCol.appendChild(el);
   }
   applyPageLayout(); // re-clamp resized items to their (possibly new) column
+  applyWidgetGap();
   applyWidgetStyles();
   // the custom player needs (re)rendering when it appears
   if (typeof renderSpotifyPlayer === "function" && document.getElementById("dt-splayer")) {
@@ -5469,6 +5484,17 @@ function applyWidgetStyles() {
     el.classList.toggle("w-text", !!s.text);
     el.classList.toggle("widget-glass", s.glass);
   }
+}
+
+// Extra vertical space added between stacked widgets, on top of each widget's
+// own built-in bottom spacing. 0 (the default) leaves the original look.
+const WIDGET_GAP_MAX = 60;
+function widgetGap() {
+  const g = deviceStyle.widgetGap;
+  return typeof g === "number" ? Math.max(0, Math.min(WIDGET_GAP_MAX, g)) : 0;
+}
+function applyWidgetGap() {
+  document.documentElement.style.setProperty("--dt-widget-gap", widgetGap() + "px");
 }
 
 function renderWidgetColors() {
@@ -5597,6 +5623,10 @@ function startWidgetDrag(startEvent, widget) {
         mid: [...midCol.querySelectorAll(":scope > .dt-widget:not(.widget-off)")].map((w) => w.dataset.widget),
         right: [...rightCol.querySelectorAll(":scope > .dt-widget:not(.widget-off)")].map((w) => w.dataset.widget),
       });
+      // a widget dropped into a narrower column must shrink to fit it (and grow
+      // back up to its saved width if moved into a wider one)
+      clampItemsToColumns();
+      alignBoxTitles();
       fixItemOverlaps();
     }
   );
