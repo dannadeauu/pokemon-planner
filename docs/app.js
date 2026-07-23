@@ -4802,6 +4802,20 @@ function applyPageLayout() {
   setVar("--dt-clock", colors.clock);
   setVar("--dt-btn-primary", colors.primary);
   setVar("--dt-btn-secondary", colors.secondary);
+  // Page-wide text color: override --text on the dashboard subtree only, so it
+  // recolors the headings / title / task text (everything that inherits --text)
+  // without touching mobile pages or the fixed #fff button + clock text. Cleared
+  // -> removed, falling back to the theme's --text.
+  const dtRootEl = document.getElementById("dt-root");
+  if (dtRootEl) {
+    if (colors.text) {
+      dtRootEl.style.color = colors.text; // inheriting text (headings, title)
+      dtRootEl.style.setProperty("--text", colors.text); // explicit color:var(--text) (task text, etc.)
+    } else {
+      dtRootEl.style.color = "";
+      dtRootEl.style.removeProperty("--text");
+    }
+  }
 
   const dash = document.querySelector(".dt-dashboard");
   // New model: independent left/right margins act as the outer column borders,
@@ -5355,6 +5369,7 @@ function syncPageEditColorInputs() {
   set("pe-clock", colors.clock || "#16171a");
   set("pe-primary", colors.primary || toHex(cs.getPropertyValue("--input-bg")) || "#35363b");
   set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
+  set("pe-textcolor", colors.text || toHex(cs.getPropertyValue("--text")) || "#e9e9ee");
 }
 
 // Seed the banner toggle + background-image controls from saved state.
@@ -5598,7 +5613,7 @@ function initEditMenu() {
   if (!menu) return;
 
   // per-device color swatches
-  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary" };
+  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary", "pe-textcolor": "text" };
   for (const [id, key] of Object.entries(colorInputs)) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -5613,6 +5628,15 @@ function initEditMenu() {
   if (resetBtn) {
     resetBtn.addEventListener("click", () => {
       deviceStyle.colors = {};
+      saveDeviceStyle();
+      applyPageLayout();
+      syncPageEditColorInputs();
+    });
+  }
+  const textReset = document.getElementById("pe-textcolor-reset");
+  if (textReset) {
+    textReset.addEventListener("click", () => {
+      if (deviceStyle.colors) delete deviceStyle.colors.text;
       saveDeviceStyle();
       applyPageLayout();
       syncPageEditColorInputs();

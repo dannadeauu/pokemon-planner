@@ -3236,6 +3236,35 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-edit-menu:not(.no-selection) #dt-edit-hint {
     display: none;
   }
+  /* page-wide text color (recolors all dashboard text, no selection needed) */
+  .dt-textcolor-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .dt-textcolor-row span {
+    flex: 1;
+  }
+  .dt-textcolor-input {
+    width: 34px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+  }
+  .dt-textcolor-input::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+  .dt-textcolor-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+  }
 
   /* ---- edit menu tabs (style / widgets) ---- */
   .dt-edit-tabs {
