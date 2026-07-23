@@ -3527,7 +3527,12 @@ document.addEventListener("visibilitychange", () => {
     pushTasks();
   } else {
     pullAll();
-    if (typeof spotifyAuth !== "undefined" && spotifyAuth) refreshSpotifyNowPlaying();
+    if (typeof spotifyAuth !== "undefined" && spotifyAuth) {
+      refreshSpotifyNowPlaying();
+      // Re-sync the player immediately on return: while the tab was hidden the
+      // song may have paused, advanced, or changed, so the local clock is stale.
+      if (typeof refreshSpotifyPlayer === "function") refreshSpotifyPlayer();
+    }
   }
 });
 // A backgrounded mobile PWA can be frozen before the debounced push fires, so
@@ -3989,16 +3994,37 @@ async function refreshSpotifyPlayer() {
       isLast = true;
     }
   }
+  // Detect what actually changed since the last poll. The heavy work (lyrics,
+  // albums, liked, full re-render) only needs to run when the track changes;
+  // rebuilding the DOM every poll would otherwise reset the lyric scroll.
+  const prevId = splayer.track && splayer.track.id;
+  const prevPlaying = splayer.isPlaying;
+  const newId = track && track.id;
+  const trackChanged = newId !== prevId;
+
   splayer.track = track;
   splayer.isPlaying = isPlaying;
   splayer.isLast = isLast;
   splayer.progressMs = progressMs;
   splayer.durationMs = track ? track.duration_ms : 0;
+  // fetchedAt anchors the local progress clock: re-anchoring on every poll keeps
+  // extrapolated time from drifting away from Spotify while playing.
   splayer.fetchedAt = Date.now();
+
+  if (!trackChanged) {
+    // Same track still loaded: just reflect play/pause and re-seat progress, so
+    // pausing/resuming (from anywhere) stays in sync without a jarring rebuild.
+    if (prevPlaying !== isPlaying) updateSplayerPlayButton();
+    updateSplayerProgress();
+    startSplayerTick();
+    return;
+  }
 
   if (track) {
     const liked = await spotifyApi("/me/tracks/contains?ids=" + track.id);
     splayer.liked = Array.isArray(liked) ? !!liked[0] : false;
+  } else {
+    splayer.liked = false;
   }
   // three most-recent distinct albums
   const rp = await spotifyApi("/me/player/recently-played?limit=50");
@@ -4018,6 +4044,22 @@ async function refreshSpotifyPlayer() {
   await loadSplayerLyrics(track);
   renderSpotifyPlayer();
   startSplayerTick();
+}
+
+// Swap just the play/pause icon in place (no full rebuild -> keeps lyric scroll).
+function updateSplayerPlayButton() {
+  const el = document.getElementById("dt-splayer");
+  if (!el) return;
+  const btn = el.querySelector('.sp-btn[data-act="playpause"]');
+  if (btn) btn.innerHTML = splayerIcon(splayer.isPlaying ? "pause" : "play");
+}
+
+// Toggle just the heart state in place (no full rebuild -> keeps lyric scroll).
+function updateSplayerHeart() {
+  const el = document.getElementById("dt-splayer");
+  if (!el) return;
+  const btn = el.querySelector('.sp-btn[data-act="like"]');
+  if (btn) btn.classList.toggle("sp-liked", splayer.liked);
 }
 
 function splayerCurrentMs() {
@@ -4160,7 +4202,7 @@ async function splayerControl(act) {
     const like = act === "like" && !splayer.liked;
     await spotifyReq("/me/tracks?ids=" + t.id, like ? "PUT" : "DELETE");
     splayer.liked = like;
-    renderSpotifyPlayer();
+    updateSplayerHeart();
     return;
   }
   if (act === "prev") await spotifyReq("/me/player/previous", "POST");
@@ -4185,11 +4227,17 @@ function initSpotify() {
     renderSpotifyPlayer();
     refreshSpotifyPlayer();
   })();
-  // keep now-playing + the custom player current while the tab is visible
+  // Poll the custom player often so pause/resume/seek/track changes made from
+  // any device re-sync within a few seconds instead of drifting for a full
+  // poll cycle. The poll is cheap when the track is unchanged (one API call).
+  setInterval(() => {
+    if (document.hidden || !spotifyAuth || !splayerVisible()) return;
+    refreshSpotifyPlayer();
+  }, 4000);
+  // The lightweight now-playing banner can stay on a slower cadence.
   setInterval(() => {
     if (document.hidden || !spotifyAuth) return;
     refreshSpotifyNowPlaying();
-    if (splayerVisible()) refreshSpotifyPlayer();
   }, 15000);
 }
 
