@@ -3966,8 +3966,11 @@ function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
     else if (delta >= 0 && delta < SPLAYER_FORWARD_JITTER_MS) anchorMs = shown; // fwd jitter
     else anchorMs = reportedMs; // real seek / significant drift
   } else if (withinGrace) {
-    // just paused locally: hold the frozen position, don't let a stale poll move it
-    anchorMs = splayer.progressMs;
+    // Just paused locally. Spotify actually stops ~one network hop after the
+    // click, a bit past our optimistic freeze, so once it *confirms* the pause
+    // its reported position is the true, authoritative stop point — adopt it.
+    // Only while the poll is stale (still reports "playing") do we hold frozen.
+    anchorMs = reportedPlaying ? splayer.progressMs : reportedMs;
   } else {
     anchorMs = reportedMs;
   }
@@ -3976,6 +3979,10 @@ function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
   splayer.fetchedAt = now;
 }
 let splayerTick = null;
+// Bumped at the start of every refresh; a response whose seq is stale (a newer
+// refresh started while it was in flight) is dropped, so out-of-order or slow
+// responses can never rewind the clock.
+let splayerReqSeq = 0;
 
 function splayerVisible() {
   const el = document.getElementById("dt-splayer");
@@ -4039,13 +4046,22 @@ async function loadSplayerLyrics(track) {
 
 async function refreshSpotifyPlayer() {
   if (!splayerVisible() || !spotifyAuth) return;
-  // Time the request so we can undo network latency: Spotify measures
-  // progress_ms roughly when it handles the call, so by the time the response
-  // lands the song has moved on by ~one network hop. Without this the lyrics run
-  // consistently late. Estimate one-way latency as half the round trip (capped).
+  const seq = ++splayerReqSeq;
+  // Refresh the access token first (a no-op when still valid) so the timing
+  // below measures only the currently-playing call. Otherwise the one-off token
+  // refresh on the first poll after a page load would inflate the latency
+  // estimate and mis-anchor the clock — a big cause of "off" lyrics on refresh.
+  await ensureSpotifyToken();
+  if (seq !== splayerReqSeq) return;
+  // Time the request so we can undo network latency: Spotify reads progress_ms
+  // early while handling the call (then does server work before responding), so
+  // by the time the response lands the song has moved on by more than half the
+  // round trip. Without this the lyrics run consistently late, so we assume the
+  // read happens ~30% in and compensate ~70% of the round trip (capped).
   const t0 = Date.now();
   const np = await spotifyApi("/me/player/currently-playing");
-  const latencyComp = Math.min(Math.round((Date.now() - t0) / 2), 750);
+  if (seq !== splayerReqSeq) return; // a newer refresh superseded this one
+  const latencyComp = Math.min(Math.round((Date.now() - t0) * 0.7), 800);
   let track = null, isPlaying = false, progressMs = 0, isLast = false;
   if (np && !np.empty && !np.error && np.item) {
     track = np.item;
@@ -4054,6 +4070,7 @@ async function refreshSpotifyPlayer() {
     progressMs = (np.progress_ms || 0) + (isPlaying ? latencyComp : 0);
   } else {
     const recent = await spotifyApi("/me/player/recently-played?limit=1");
+    if (seq !== splayerReqSeq) return; // superseded
     if (recent && recent.items && recent.items[0]) {
       track = recent.items[0].track;
       isLast = true;
@@ -4111,6 +4128,7 @@ async function refreshSpotifyPlayer() {
   }
   splayer.albums = albums;
   await loadSplayerLyrics(track);
+  if (seq !== splayerReqSeq) return; // superseded while loading lyrics/albums
   renderSpotifyPlayer();
   startSplayerTick();
 }
