@@ -1622,7 +1622,11 @@ body.theme-dark .dex-cell.undiscovered img {
   }
 
   .dt-root {
-    display: block;
+    /* flow-root establishes a block formatting context so a first child's top
+       margin (e.g. the title row when the banner is removed) can't collapse
+       through and push the dashboard — and the inset:0 bg layer — down, which
+       left an unfilled strip at the very top. */
+    display: flow-root;
     padding-bottom: 64px;
     position: relative;
     isolation: isolate; /* own stacking context so the bg layer sits above body */
