@@ -844,6 +844,29 @@ function initSettings() {
     });
   }
 
+  // "clear cache" drops the service-worker caches and reloads, so a stuck/stale
+  // shell (old app.js/style.css) gets replaced with the latest deployed version.
+  const clearCacheBtn = document.getElementById("clear-cache-btn");
+  if (clearCacheBtn) {
+    clearCacheBtn.addEventListener("click", async () => {
+      clearCacheBtn.disabled = true;
+      clearCacheBtn.textContent = "clearing…";
+      try {
+        if (window.caches) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+        if (navigator.serviceWorker) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+        }
+      } catch (e) {
+        // best-effort; reload anyway to pull fresh files from the network
+      }
+      location.reload();
+    });
+  }
+
   matchCompanionBtnEl.addEventListener("click", () => {
     settings.matchCompanion = !settings.matchCompanion;
     saveSettings(settings);
@@ -3915,8 +3938,38 @@ function renderSpotifyPanel() {
 const splayer = {
   track: null, isLast: false, isPlaying: false,
   progressMs: 0, durationMs: 0, fetchedAt: 0,
+  // stateChangedAt: when we last toggled play/pause locally. A poll that lands
+  // within GRACE of it is ignored for the play/pause flag, since Spotify may not
+  // have registered the change yet and would otherwise flip us back and forth.
+  stateChangedAt: 0,
   liked: false, lyrics: null, lyricsKey: "", albums: [],
 };
+// Reconcile a poll against the same, already-loaded track without yanking the
+// lyrics. Small backward position corrections (network jitter / clock latency)
+// are treated as noise and ignored; only a real seek (> SEEK_TOLERANCE) or a
+// forward move is accepted. A just-issued local play/pause wins during GRACE.
+const SPLAYER_GRACE_MS = 3000;
+const SPLAYER_SEEK_TOLERANCE_MS = 1500;
+function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
+  const now = Date.now();
+  const shown = splayerCurrentMs();
+  const withinGrace = now - splayer.stateChangedAt < SPLAYER_GRACE_MS;
+  const playing = withinGrace ? splayer.isPlaying : reportedPlaying;
+  let anchorMs;
+  if (playing) {
+    const delta = reportedMs - shown;
+    // ignore tiny backward snaps; keep the clock moving forward smoothly
+    anchorMs = delta < 0 && delta > -SPLAYER_SEEK_TOLERANCE_MS ? shown : reportedMs;
+  } else if (withinGrace) {
+    // just paused locally: hold the frozen position, don't let a stale poll move it
+    anchorMs = splayer.progressMs;
+  } else {
+    anchorMs = reportedMs;
+  }
+  splayer.isPlaying = playing;
+  splayer.progressMs = anchorMs;
+  splayer.fetchedAt = now;
+}
 let splayerTick = null;
 
 function splayerVisible() {
@@ -4002,6 +4055,19 @@ async function refreshSpotifyPlayer() {
   const newId = track && track.id;
   const trackChanged = newId !== prevId;
 
+  if (!trackChanged && track) {
+    // Same track still loaded: reconcile play/pause + position without a jarring
+    // rebuild, and without letting jitter or a racing poll rewind the lyrics.
+    // (reconcile reads the *old* anchor via splayerCurrentMs, so run it first.)
+    reconcileSplayerSameTrack(isPlaying, progressMs);
+    splayer.isLast = isLast;
+    splayer.durationMs = track.duration_ms;
+    if (prevPlaying !== splayer.isPlaying) updateSplayerPlayButton();
+    updateSplayerProgress();
+    startSplayerTick();
+    return;
+  }
+
   splayer.track = track;
   splayer.isPlaying = isPlaying;
   splayer.isLast = isLast;
@@ -4010,15 +4076,6 @@ async function refreshSpotifyPlayer() {
   // fetchedAt anchors the local progress clock: re-anchoring on every poll keeps
   // extrapolated time from drifting away from Spotify while playing.
   splayer.fetchedAt = Date.now();
-
-  if (!trackChanged) {
-    // Same track still loaded: just reflect play/pause and re-seat progress, so
-    // pausing/resuming (from anywhere) stays in sync without a jarring rebuild.
-    if (prevPlaying !== isPlaying) updateSplayerPlayButton();
-    updateSplayerProgress();
-    startSplayerTick();
-    return;
-  }
 
   if (track) {
     const liked = await spotifyApi("/me/tracks/contains?ids=" + track.id);
@@ -4215,6 +4272,7 @@ async function splayerControl(act) {
     splayer.progressMs = Math.min(splayerCurrentMs(), dur);
     splayer.isPlaying = willPlay;
     splayer.fetchedAt = Date.now();
+    splayer.stateChangedAt = Date.now(); // start the grace window (see reconcile)
     updateSplayerPlayButton();
     updateSplayerProgress();
     await spotifyReq(willPlay ? "/me/player/play" : "/me/player/pause", "PUT");
@@ -5473,7 +5531,7 @@ function startDesktopClock() {
     const pm = hr >= 12;
     hr = hr % 12;
     if (hr === 0) hr = 12;
-    hEl.textContent = hr;
+    hEl.textContent = String(hr).padStart(2, "0");
     mEl.textContent = String(d.getMinutes()).padStart(2, "0");
     apEl.textContent = pm ? "PM" : "AM";
   };
