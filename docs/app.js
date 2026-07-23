@@ -3991,11 +3991,22 @@ function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
   if (playing) {
     const delta = reportedMs - shown;
     // The local clock ticks at real speed, so between polls it stays accurate on
-    // its own. Only hard-correct on a real seek or meaningful drift; ignore the
-    // small +/- wobble from per-request latency variance so lyrics never twitch.
-    if (delta < 0 && delta > -SPLAYER_SEEK_TOLERANCE_MS) anchorMs = shown; // back jitter
-    else if (delta >= 0 && delta < SPLAYER_FORWARD_JITTER_MS) anchorMs = shown; // fwd jitter
-    else anchorMs = reportedMs; // real seek / significant drift
+    // its own. Keep it MONOTONIC across polls: a single reading may pull us
+    // forward to catch up, or hold, but never steps us backward — Spotify returns
+    // the occasional stale/low progress_ms, and honoring it is what made the
+    // lyrics backtrack right after syncing. A genuine rewind is only honored once
+    // several consecutive polls agree the position really moved back.
+    if (delta > SPLAYER_FORWARD_JITTER_MS) {
+      anchorMs = reportedMs; // we fell behind the audio -> catch up forward
+      splayer._seekBackVotes = 0;
+    } else if (delta < -SPLAYER_SEEK_TOLERANCE_MS) {
+      splayer._seekBackVotes = (splayer._seekBackVotes || 0) + 1;
+      if (splayer._seekBackVotes >= 3) { anchorMs = reportedMs; splayer._seekBackVotes = 0; } // confirmed rewind
+      else anchorMs = shown; // one-off low reading -> ignore, hold the clock
+    } else {
+      anchorMs = shown; // within tolerance -> hold the smooth free-running clock
+      splayer._seekBackVotes = 0;
+    }
   } else if (withinGrace) {
     // Just paused locally. Spotify actually stops ~one network hop after the
     // click, a bit past our optimistic freeze, so once it *confirms* the pause
