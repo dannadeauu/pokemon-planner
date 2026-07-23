@@ -1171,6 +1171,10 @@ h1 {
 
 .park-floor {
   position: relative;
+  /* Contain the actors' per-actor z-indexes (which track their floor y) in a
+     local stacking context, so they can't render above overlays/menus (e.g.
+     the pokedex entry popup) that sit on top of the whole park. */
+  isolation: isolate;
   height: 230px;
   margin-top: 12px;
   background: var(--team-card);
@@ -3199,7 +3203,7 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 16px 20px 20px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 6px;
   }
   .sp-label {
     font-size: 16px;
