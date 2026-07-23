@@ -4144,6 +4144,7 @@ async function refreshSpotifyPlayer() {
   splayer.isLast = isLast;
   splayer.progressMs = progressMs;
   splayer.durationMs = track ? track.duration_ms : 0;
+  splayer._prevRestartAt = 0; // the track changed, so the skip-back arm resets
   // fetchedAt anchors the local progress clock: re-anchoring on every poll keeps
   // extrapolated time from drifting away from Spotify while playing.
   splayer.fetchedAt = Date.now();
@@ -4366,9 +4367,42 @@ async function splayerControl(act) {
     setTimeout(refreshSpotifyPlayer, 350); // reconcile exact stop point with Spotify
     return;
   }
-  if (act === "prev") await spotifyReq("/me/player/previous", "POST");
-  else if (act === "next") await spotifyReq("/me/player/next", "POST");
-  setTimeout(refreshSpotifyPlayer, 350); // let Spotify apply, then re-sync
+  if (act === "prev") {
+    const now = Date.now();
+    const pos = splayerCurrentMs();
+    // First skip-back restarts the current song. A second skip-back while still
+    // in the first 5s (i.e. right after that restart) skips to the previous
+    // track. The 10s wall-clock guard keeps a stale restart from a much earlier
+    // song from arming this once a new track has started on its own.
+    const armed = splayer._prevRestartAt && now - splayer._prevRestartAt < 10000;
+    if (armed && pos < 5000) {
+      splayer._prevRestartAt = 0;
+      splayerReqSeq++; // drop any in-flight poll so it can't fight the change
+      await spotifyReq("/me/player/previous", "POST");
+    } else {
+      splayer._prevRestartAt = now;
+      // Optimistically snap to the top so the lyrics restart instantly; bump the
+      // request seq so an in-flight poll (still reporting the old position) is
+      // dropped instead of snapping the clock forward again.
+      splayerReqSeq++;
+      splayer.resuming = false;
+      splayer.progressMs = 0;
+      splayer.fetchedAt = now;
+      splayer.stateChangedAt = now;
+      splayer._seekBackVotes = 0;
+      splayer._lyricIdx = -1;
+      updateSplayerProgress();
+      await spotifyReq("/me/player/seek?position_ms=0", "PUT");
+    }
+    setTimeout(refreshSpotifyPlayer, 350); // let Spotify apply, then re-sync
+    return;
+  }
+  if (act === "next") {
+    splayer._prevRestartAt = 0;
+    await spotifyReq("/me/player/next", "POST");
+    setTimeout(refreshSpotifyPlayer, 350); // let Spotify apply, then re-sync
+    return;
+  }
 }
 
 // Poll quickly after an unpause until Spotify confirms it actually resumed; the
