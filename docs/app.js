@@ -3950,6 +3950,7 @@ const splayer = {
 // forward move is accepted. A just-issued local play/pause wins during GRACE.
 const SPLAYER_GRACE_MS = 3000;
 const SPLAYER_SEEK_TOLERANCE_MS = 1500;
+const SPLAYER_FORWARD_JITTER_MS = 600;
 function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
   const now = Date.now();
   const shown = splayerCurrentMs();
@@ -3958,8 +3959,12 @@ function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
   let anchorMs;
   if (playing) {
     const delta = reportedMs - shown;
-    // ignore tiny backward snaps; keep the clock moving forward smoothly
-    anchorMs = delta < 0 && delta > -SPLAYER_SEEK_TOLERANCE_MS ? shown : reportedMs;
+    // The local clock ticks at real speed, so between polls it stays accurate on
+    // its own. Only hard-correct on a real seek or meaningful drift; ignore the
+    // small +/- wobble from per-request latency variance so lyrics never twitch.
+    if (delta < 0 && delta > -SPLAYER_SEEK_TOLERANCE_MS) anchorMs = shown; // back jitter
+    else if (delta >= 0 && delta < SPLAYER_FORWARD_JITTER_MS) anchorMs = shown; // fwd jitter
+    else anchorMs = reportedMs; // real seek / significant drift
   } else if (withinGrace) {
     // just paused locally: hold the frozen position, don't let a stale poll move it
     anchorMs = splayer.progressMs;
@@ -4034,12 +4039,19 @@ async function loadSplayerLyrics(track) {
 
 async function refreshSpotifyPlayer() {
   if (!splayerVisible() || !spotifyAuth) return;
+  // Time the request so we can undo network latency: Spotify measures
+  // progress_ms roughly when it handles the call, so by the time the response
+  // lands the song has moved on by ~one network hop. Without this the lyrics run
+  // consistently late. Estimate one-way latency as half the round trip (capped).
+  const t0 = Date.now();
   const np = await spotifyApi("/me/player/currently-playing");
+  const latencyComp = Math.min(Math.round((Date.now() - t0) / 2), 750);
   let track = null, isPlaying = false, progressMs = 0, isLast = false;
   if (np && !np.empty && !np.error && np.item) {
     track = np.item;
     isPlaying = !!np.is_playing;
-    progressMs = np.progress_ms || 0;
+    // only advance a *playing* position; a paused position is static
+    progressMs = (np.progress_ms || 0) + (isPlaying ? latencyComp : 0);
   } else {
     const recent = await spotifyApi("/me/player/recently-played?limit=1");
     if (recent && recent.items && recent.items[0]) {
