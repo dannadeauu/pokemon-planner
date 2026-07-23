@@ -3203,7 +3203,7 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 16px 20px 20px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0px;
   }
   .sp-label {
     font-size: 16px;
