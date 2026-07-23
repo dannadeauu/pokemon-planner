@@ -3605,7 +3605,7 @@ const DESKTOP_MQ = window.matchMedia("(min-width: 1024px)");
 
 const UI_PREFS_KEY = "todo-app-ui-prefs";
 function loadUiPrefs() {
-  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50, pageLayout: {} };
+  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50, bannerHidden: false, pageLayout: {} };
   try {
     const s = JSON.parse(localStorage.getItem(UI_PREFS_KEY));
     if (s && typeof s === "object") return { ...defaults, ...s, pageLayout: { ...(s.pageLayout || {}) } };
@@ -3623,7 +3623,7 @@ function saveUiPrefs() {
 let uiSyncTimer = null;
 let lastSyncedUi = null;
 function uiSyncBody() {
-  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, pageLayout: uiPrefs.pageLayout });
+  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, bannerHidden: uiPrefs.bannerHidden, pageLayout: uiPrefs.pageLayout });
 }
 function touchUiPrefs() {
   uiPrefs.updatedAt = new Date().toISOString();
@@ -3641,7 +3641,7 @@ async function pushUi() {
     if (!authSession) return;
     await supabaseRpc(
       "push_ui",
-      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, pageLayout: uiPrefs.pageLayout, updatedAt: uiPrefs.updatedAt } },
+      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, bannerHidden: uiPrefs.bannerHidden, pageLayout: uiPrefs.pageLayout, updatedAt: uiPrefs.updatedAt } },
       authSession.access_token
     );
     lastSyncedUi = body;
@@ -3667,6 +3667,7 @@ async function pullUi() {
       if (typeof d.title === "string") uiPrefs.title = d.title;
       if (typeof d.spotify === "string") uiPrefs.spotify = d.spotify;
       if (typeof d.bannerPos === "number") uiPrefs.bannerPos = d.bannerPos;
+      if (typeof d.bannerHidden === "boolean") uiPrefs.bannerHidden = d.bannerHidden;
       if (d.pageLayout && typeof d.pageLayout === "object") uiPrefs.pageLayout = d.pageLayout;
       uiPrefs.updatedAt = remote.updated_at;
       saveUiPrefs();
@@ -4464,6 +4465,8 @@ function renderTitle() {
 }
 
 function applyUiPrefs() {
+  const root = document.getElementById("dt-root");
+  if (root) root.classList.toggle("dt-no-banner", Boolean(uiPrefs.bannerHidden));
   const banner = document.getElementById("dt-banner");
   if (banner) {
     banner.style.backgroundImage = uiPrefs.banner ? `url("${uiPrefs.banner}")` : "";
@@ -4661,12 +4664,13 @@ function loadDeviceStyle() {
         widgets: s.widgets && typeof s.widgets === "object" ? s.widgets : null,
         widgetStyles: s.widgetStyles && typeof s.widgetStyles === "object" ? s.widgetStyles : {},
         widgetGap: typeof s.widgetGap === "number" ? s.widgetGap : null,
+        bgImage: s.bgImage && typeof s.bgImage === "object" ? s.bgImage : null,
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -4676,6 +4680,111 @@ function stripHtml(html) {
   const d = document.createElement("div");
   d.innerHTML = html || "";
   return d.textContent || "";
+}
+
+// ==========================================================================
+// Page background image (per-device). Sits behind all content in #dt-bg-layer
+// and scrolls with the page, so it "ends" partway down; below it the layer's own
+// background shows the chosen end fill — a solid color, or a soft "mirage" of
+// dispersed colors sampled from the image (frosted with a grain overlay).
+// ==========================================================================
+const BG_DEFAULTS = { src: null, posX: 50, posY: 50, zoom: 100, height: 900, end: "solid", endColor: null, mirage: null };
+// A very dispersed rainbow fallback if we can't sample the image (e.g. a remote
+// link with no CORS): mirrors the soft blue→green→yellow→pink spread.
+const DEFAULT_MIRAGE = ["120,110,220", "96,150,214", "126,201,150", "232,214,120", "234,150,110", "225,112,162"];
+// Tiny fractal-noise tile for the frosted grain (inline SVG data URL).
+const GRAIN_URL =
+  "url(\"data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#n)" opacity="0.6"/></svg>'
+  ) +
+  "\")";
+
+function bgImageCfg() {
+  return { ...BG_DEFAULTS, ...(deviceStyle.bgImage || {}) };
+}
+function saveBgImageCfg(patch) {
+  deviceStyle.bgImage = { ...bgImageCfg(), ...patch };
+  saveDeviceStyle();
+}
+
+// Sample a spread of colors from the image by drawing it tiny and reading a
+// grid of pixels. Resolves null if the canvas is tainted (remote image without
+// CORS) so the caller can fall back to the default palette.
+function sampleImageColors(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const n = 4;
+        const c = document.createElement("canvas");
+        c.width = n;
+        c.height = n;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, n, n);
+        const d = ctx.getImageData(0, 0, n, n).data;
+        const all = [];
+        for (let i = 0; i < n * n; i++) all.push(`${d[i * 4]},${d[i * 4 + 1]},${d[i * 4 + 2]}`);
+        const picks = [];
+        const step = Math.max(1, Math.floor(all.length / 6));
+        for (let i = 0; i < all.length && picks.length < 6; i += step) picks.push(all[i]);
+        resolve(picks.length ? picks : null);
+      } catch (e) {
+        resolve(null); // tainted canvas
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+// Build a dispersed, slightly-frosted multi-color gradient from sampled colors:
+// soft large radial blooms at spread-out spots over an averaged base, plus a
+// faint white wash. The grain overlay (CSS) supplies the frosted texture.
+function buildMirageGradient(colors) {
+  const cols = colors && colors.length ? colors : DEFAULT_MIRAGE;
+  const spots = [[14, 8], [84, 14], [50, 42], [18, 74], [82, 66], [50, 96]];
+  const layers = spots.map((p, i) => {
+    const c = cols[i % cols.length];
+    return `radial-gradient(60% 55% at ${p[0]}% ${p[1]}%, rgba(${c},0.85) 0%, rgba(${c},0) 68%)`;
+  });
+  // averaged base color so there are no gaps between the blooms
+  const acc = [0, 0, 0];
+  cols.forEach((c) => c.split(",").forEach((v, k) => (acc[k] += Number(v))));
+  const avg = acc.map((v) => Math.round(v / cols.length)).join(",");
+  layers.unshift("linear-gradient(rgba(255,255,255,0.10), rgba(255,255,255,0.03))"); // frost wash
+  layers.push(`linear-gradient(rgba(${avg},1), rgba(${avg},1))`);
+  return layers.join(", ");
+}
+
+// Push the current bg-image config to CSS (idempotent; safe to call any time).
+function applyBackgroundImage() {
+  const root = document.getElementById("dt-root");
+  const layer = document.getElementById("dt-bg-layer");
+  const imgEl = document.getElementById("dt-bg-img");
+  const grain = document.getElementById("dt-bg-grain");
+  if (!root || !layer || !imgEl) return;
+  const b = bgImageCfg();
+  if (!b.src) {
+    root.classList.remove("has-bg-image");
+    return;
+  }
+  root.classList.add("has-bg-image");
+  const rs = document.documentElement.style;
+  rs.setProperty("--dt-bg-image", `url("${b.src}")`);
+  rs.setProperty("--dt-bg-img-h", (b.height || 900) + "px");
+  rs.setProperty("--dt-bg-size", b.zoom > 100 ? b.zoom + "% auto" : "cover");
+  rs.setProperty("--dt-bg-pos", `${b.posX}% ${b.posY}%`);
+  if (grain) rs.setProperty("--dt-grain-url", GRAIN_URL);
+  if (b.end === "mirage") {
+    layer.classList.add("has-mirage");
+    layer.style.background = buildMirageGradient(b.mirage);
+  } else {
+    layer.classList.remove("has-mirage");
+    const endColor = b.endColor || (deviceStyle.colors && deviceStyle.colors.bg) || getComputedStyle(document.body).backgroundColor;
+    layer.style.background = endColor;
+  }
 }
 
 // Apply the saved sizes + colors to the desktop layout (idempotent).
@@ -4757,6 +4866,7 @@ function applyPageLayout() {
     }
   }
   alignBoxTitles();
+  applyBackgroundImage();
   fixItemOverlaps();
 }
 
@@ -5218,7 +5328,12 @@ function setPageEdit(on) {
     if (calRow) buildColHandles(calRow, "calCols");
     buildItemHandles();
     syncPageEditColorInputs();
+    syncBgImageInputs();
     updateFmtSelectionUI();
+  } else {
+    // leaving edit mode also exits any active background crop
+    const root2 = document.getElementById("dt-root");
+    if (root2) root2.classList.remove("dt-bg-editing");
   }
 }
 
@@ -5240,6 +5355,168 @@ function syncPageEditColorInputs() {
   set("pe-clock", colors.clock || "#16171a");
   set("pe-primary", colors.primary || toHex(cs.getPropertyValue("--input-bg")) || "#35363b");
   set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
+}
+
+// Seed the banner toggle + background-image controls from saved state.
+function syncBgImageInputs() {
+  const bannerOn = document.getElementById("pe-banner-on");
+  if (bannerOn) bannerOn.checked = !uiPrefs.bannerHidden;
+
+  const b = bgImageCfg();
+  const hasImg = Boolean(b.src);
+  const controls = document.getElementById("pe-bgimg-controls");
+  if (controls) controls.classList.toggle("hidden", !hasImg);
+  const remove = document.getElementById("pe-bgimg-remove");
+  if (remove) remove.disabled = !hasImg;
+  const zoom = document.getElementById("pe-bgimg-zoom");
+  if (zoom) zoom.value = String(b.zoom || 100);
+  const height = document.getElementById("pe-bgimg-height");
+  if (height) height.value = String(b.height || 900);
+  const solid = document.getElementById("pe-bgend-solid");
+  const mirage = document.getElementById("pe-bgend-mirage");
+  if (solid) solid.checked = b.end !== "mirage";
+  if (mirage) mirage.checked = b.end === "mirage";
+  const swatch = document.getElementById("pe-bgend-color");
+  if (swatch) {
+    const toHex = (c) => {
+      const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || "");
+      return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
+    };
+    swatch.value =
+      b.endColor ||
+      (deviceStyle.colors && deviceStyle.colors.bg) ||
+      toHex(getComputedStyle(document.body).backgroundColor) ||
+      "#1b1c1f";
+  }
+}
+
+// Wire the banner show/hide toggle + all background-image controls (set / clear,
+// zoom, height, end-of-scroll fill, and the on-page crop drag). Called once.
+function initBannerAndBgControls() {
+  const root = document.getElementById("dt-root");
+
+  // --- banner add / remove ---
+  const bannerOn = document.getElementById("pe-banner-on");
+  if (bannerOn) {
+    bannerOn.addEventListener("change", () => {
+      uiPrefs.bannerHidden = !bannerOn.checked;
+      applyUiPrefs();
+      touchUiPrefs();
+    });
+  }
+
+  // --- background image: set from an upload or a link ---
+  const setBgSrc = async (src) => {
+    const mirage = await sampleImageColors(src); // null if remote/tainted -> default palette
+    saveBgImageCfg({ src, posX: 50, posY: 50, zoom: 100, mirage });
+    applyBackgroundImage();
+    syncBgImageInputs();
+  };
+  const fileInput = document.getElementById("pe-bgimg-input");
+  const upload = document.getElementById("pe-bgimg-upload");
+  if (upload && fileInput) {
+    upload.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => downscaleImage(reader.result, 1920, 0.82).then(setBgSrc);
+      reader.readAsDataURL(file);
+    });
+  }
+  const link = document.getElementById("pe-bgimg-link");
+  if (link) {
+    link.addEventListener("click", () => {
+      const v = window.prompt("paste an image link (url):", "");
+      if (v === null) return;
+      const url = v.trim();
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)) {
+        window.alert("please paste a valid image link starting with http:// or https://");
+        return;
+      }
+      setBgSrc(url);
+    });
+  }
+  const remove = document.getElementById("pe-bgimg-remove");
+  if (remove) {
+    remove.addEventListener("click", () => {
+      if (root) root.classList.remove("dt-bg-editing");
+      deviceStyle.bgImage = null;
+      saveDeviceStyle();
+      applyBackgroundImage();
+      syncBgImageInputs();
+    });
+  }
+
+  // --- zoom / height sliders ---
+  const zoom = document.getElementById("pe-bgimg-zoom");
+  if (zoom) {
+    zoom.addEventListener("input", () => {
+      saveBgImageCfg({ zoom: parseInt(zoom.value, 10) || 100 });
+      applyBackgroundImage();
+    });
+  }
+  const height = document.getElementById("pe-bgimg-height");
+  if (height) {
+    height.addEventListener("input", () => {
+      saveBgImageCfg({ height: parseInt(height.value, 10) || 900 });
+      applyBackgroundImage();
+    });
+  }
+
+  // --- end-of-scroll fill: solid color vs. mirage blur ---
+  const solid = document.getElementById("pe-bgend-solid");
+  const mirage = document.getElementById("pe-bgend-mirage");
+  if (solid) solid.addEventListener("change", () => { if (solid.checked) { saveBgImageCfg({ end: "solid" }); applyBackgroundImage(); } });
+  if (mirage) mirage.addEventListener("change", () => { if (mirage.checked) { saveBgImageCfg({ end: "mirage" }); applyBackgroundImage(); } });
+  const swatch = document.getElementById("pe-bgend-color");
+  if (swatch) {
+    swatch.addEventListener("input", () => {
+      saveBgImageCfg({ end: "solid", endColor: swatch.value });
+      if (solid) solid.checked = true;
+      applyBackgroundImage();
+    });
+  }
+
+  // --- on-page crop: raise the layer above content, drag to pan, wheel to zoom ---
+  const repositionBtn = document.getElementById("pe-bgimg-reposition");
+  const layer = document.getElementById("dt-bg-layer");
+  if (repositionBtn && layer && root) {
+    repositionBtn.addEventListener("click", () => {
+      const on = !root.classList.contains("dt-bg-editing");
+      root.classList.toggle("dt-bg-editing", on && Boolean(bgImageCfg().src));
+      repositionBtn.textContent = root.classList.contains("dt-bg-editing") ? "done cropping" : "reposition / crop";
+    });
+    layer.addEventListener("pointerdown", (e) => {
+      if (!root.classList.contains("dt-bg-editing") || !bgImageCfg().src) return;
+      const start = bgImageCfg();
+      const rect = layer.getBoundingClientRect();
+      pageDrag(
+        e,
+        (dx, dy) => {
+          const px = Math.max(0, Math.min(100, start.posX - (dx / rect.width) * 100));
+          const py = Math.max(0, Math.min(100, start.posY - (dy / Math.max(1, start.height)) * 100));
+          deviceStyle.bgImage = { ...bgImageCfg(), posX: px, posY: py };
+          document.documentElement.style.setProperty("--dt-bg-pos", `${px}% ${py}%`);
+        },
+        () => saveDeviceStyle()
+      );
+    });
+    layer.addEventListener(
+      "wheel",
+      (e) => {
+        if (!root.classList.contains("dt-bg-editing") || !bgImageCfg().src) return;
+        e.preventDefault();
+        const next = Math.max(100, Math.min(300, (bgImageCfg().zoom || 100) + (e.deltaY < 0 ? 6 : -6)));
+        saveBgImageCfg({ zoom: next });
+        applyBackgroundImage();
+        if (zoom) zoom.value = String(next);
+      },
+      { passive: false }
+    );
+  }
 }
 
 // ==========================================================================
@@ -5343,6 +5620,8 @@ function initEditMenu() {
   }
   const doneBtn = document.getElementById("dt-edit-done");
   if (doneBtn) doneBtn.addEventListener("click", () => setPageEdit(false));
+
+  initBannerAndBgControls();
 
   // restore the last dragged position (per-device)
   if (deviceStyle.menuPos) {

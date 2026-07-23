@@ -1624,6 +1624,85 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-root {
     display: block;
     padding-bottom: 64px;
+    position: relative;
+    isolation: isolate; /* own stacking context so the bg layer sits above body */
+    min-height: 100vh;  /* the bg layer (inset:0) always covers at least the viewport */
+  }
+
+  /* ---- optional page background image + end-of-scroll fill ---- */
+  .dt-bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* behind all page content (contained by .dt-root's context) */
+    overflow: hidden;
+    pointer-events: none;
+    display: none; /* shown only once an image is set (via .has-bg-image) */
+  }
+  .dt-root.has-bg-image .dt-bg-layer {
+    display: block;
+  }
+  /* the image band: pinned to the top, fades out at its bottom into the layer's
+     own background (the chosen end fill) */
+  .dt-bg-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--dt-bg-img-h, 900px);
+    background-image: var(--dt-bg-image, none);
+    background-repeat: no-repeat;
+    background-size: var(--dt-bg-size, cover);
+    background-position: var(--dt-bg-pos, 50% 50%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  }
+  /* frosted grain, shown over the "mirage" end fill for a soft dispersed look */
+  .dt-bg-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    background-image: var(--dt-grain-url);
+    background-size: 180px 180px;
+    mix-blend-mode: soft-light;
+  }
+  .dt-bg-layer.has-mirage .dt-bg-grain {
+    opacity: 0.5;
+  }
+  .dt-bg-edit-hint {
+    position: absolute;
+    left: 50%;
+    top: 16px;
+    transform: translateX(-50%);
+    padding: 7px 14px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  /* while cropping, raise the whole layer above content so it can be dragged */
+  .dt-root.dt-bg-editing .dt-bg-layer {
+    z-index: 40;
+    pointer-events: auto;
+    cursor: grab;
+  }
+  .dt-root.dt-bg-editing .dt-bg-layer:active {
+    cursor: grabbing;
+  }
+  .dt-root.dt-bg-editing .dt-bg-img {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: -2px;
+  }
+  .dt-root.dt-bg-editing .dt-bg-edit-hint {
+    opacity: 1;
+  }
+  /* removing the banner hides the strip entirely */
+  .dt-root.dt-no-banner .dt-banner {
+    display: none;
   }
 
   .dt-title-row,
@@ -3014,6 +3093,96 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 10px;
     cursor: pointer;
   }
+  /* banner toggle + background-image controls */
+  .dt-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .dt-toggle-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-add);
+    cursor: pointer;
+  }
+  .dt-bgimg-btns {
+    display: flex;
+    gap: 6px;
+  }
+  .dt-bgimg-btn {
+    flex: 1;
+  }
+  .dt-bgimg-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .dt-bgimg-controls.hidden {
+    display: none;
+  }
+  .dt-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .dt-slider-row span {
+    width: 44px;
+  }
+  .dt-slider-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--color-add);
+    cursor: pointer;
+  }
+  .dt-bgend-list {
+    list-style: disc;
+    padding-left: 20px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dt-bgend-list li {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .dt-bgend-list label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .dt-bgend-list input[type="radio"] {
+    accent-color: var(--color-add);
+    cursor: pointer;
+  }
+  .dt-bgend-swatch {
+    width: 34px;
+    height: 22px;
+    margin-top: 6px;
+    margin-left: 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .dt-bgend-swatch::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+  .dt-bgend-swatch::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+  }
+
   .dt-edit-text {
     display: flex;
     gap: 8px;

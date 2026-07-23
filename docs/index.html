@@ -21,6 +21,15 @@
        live team / task / poképark / pokédex nodes are relocated into its slots
        by JS, so all existing rendering keeps working. Mobile is untouched. -->
   <div class="dt-root" id="dt-root">
+    <!-- Optional page background image. Sits behind all content and scrolls with
+         the page, so the image "ends" as you scroll; below it (and through its
+         faded bottom) the layer's own background shows the chosen end fill
+         (solid color or a sampled color "mirage"). Hidden until an image is set. -->
+    <div class="dt-bg-layer" id="dt-bg-layer" aria-hidden="true">
+      <div class="dt-bg-grain" id="dt-bg-grain"></div>
+      <div class="dt-bg-img" id="dt-bg-img"></div>
+      <div class="dt-bg-edit-hint">drag to reposition · scroll or use the zoom slider to resize</div>
+    </div>
     <div class="dt-banner" id="dt-banner">
       <div class="dt-banner-btns">
         <button class="dt-banner-btn dt-banner-reposition" id="dt-banner-reposition" type="button">reposition</button>
@@ -409,6 +418,33 @@
         <label class="dt-swatch"><input type="color" id="pe-bg" /><span>background</span></label>
       </div>
       <button class="dt-edit-reset" id="pe-reset-colors" type="button">reset colors</button>
+
+      <div class="dt-edit-label">banner</div>
+      <label class="dt-toggle-row"><input type="checkbox" id="pe-banner-on" /><span>show banner</span></label>
+
+      <div class="dt-edit-label">background image</div>
+      <div class="dt-bgimg-btns">
+        <button class="dt-edit-reset dt-bgimg-btn" id="pe-bgimg-upload" type="button">upload</button>
+        <button class="dt-edit-reset dt-bgimg-btn" id="pe-bgimg-link" type="button">paste link</button>
+        <button class="dt-edit-reset dt-bgimg-btn" id="pe-bgimg-remove" type="button">remove</button>
+      </div>
+      <input type="file" id="pe-bgimg-input" accept="image/*" hidden />
+      <div class="dt-bgimg-controls hidden" id="pe-bgimg-controls">
+        <button class="dt-edit-reset" id="pe-bgimg-reposition" type="button">reposition / crop</button>
+        <label class="dt-slider-row"><span>zoom</span><input type="range" id="pe-bgimg-zoom" min="100" max="300" step="2" /></label>
+        <label class="dt-slider-row"><span>height</span><input type="range" id="pe-bgimg-height" min="300" max="2200" step="10" /></label>
+        <div class="dt-edit-label">when the image ends</div>
+        <ul class="dt-bgend-list">
+          <li>
+            <label><input type="radio" name="pe-bgend" id="pe-bgend-solid" value="solid" /><span>fade into solid color</span></label>
+            <input type="color" id="pe-bgend-color" class="dt-bgend-swatch" />
+          </li>
+          <li>
+            <label><input type="radio" name="pe-bgend" id="pe-bgend-mirage" value="mirage" /><span>fade into background blur</span></label>
+          </li>
+        </ul>
+      </div>
+
       <div class="dt-edit-label">text</div>
       <div class="dt-edit-text">
         <button class="dt-fmt" id="fmt-bold" type="button" title="bold"><b>B</b></button>
