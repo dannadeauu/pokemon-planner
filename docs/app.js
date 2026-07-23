@@ -3942,6 +3942,11 @@ const splayer = {
   // within GRACE of it is ignored for the play/pause flag, since Spotify may not
   // have registered the change yet and would otherwise flip us back and forth.
   stateChangedAt: 0,
+  // resuming: an unpause is pending. The clock stays frozen at the paused line
+  // until Spotify confirms it actually resumed (which can lag by seconds while a
+  // device spins up); then we jump FORWARD to the real position. This keeps
+  // unpause motion strictly forward so the lyrics never snap backward.
+  resuming: false,
   liked: false, lyrics: null, lyricsKey: "", albums: [],
 };
 // Reconcile a poll against the same, already-loaded track without yanking the
@@ -3953,6 +3958,32 @@ const SPLAYER_SEEK_TOLERANCE_MS = 1500;
 const SPLAYER_FORWARD_JITTER_MS = 600;
 function reconcileSplayerSameTrack(reportedPlaying, reportedMs) {
   const now = Date.now();
+  if (splayer.resuming) {
+    // Unpause in progress. We started advancing optimistically for a smooth
+    // start, but Spotify may not have actually resumed yet (a device can take a
+    // moment). Keep the motion strictly forward: if the audio is behind us, stop
+    // and wait for it to catch up rather than ever snapping the lyrics backward.
+    const shownNow = splayerCurrentMs();
+    if (!reportedPlaying) {
+      // audio still paused: freeze where we are so we don't overshoot further
+      splayer.isPlaying = false;
+      splayer.progressMs = shownNow;
+      splayer.fetchedAt = now;
+    } else if (reportedMs >= shownNow - SPLAYER_FORWARD_JITTER_MS) {
+      // audio has reached us (or we were accurate): resume normal tracking,
+      // never stepping back (Math.max guards against a small latency undershoot)
+      splayer.resuming = false;
+      splayer.isPlaying = true;
+      splayer.progressMs = Math.max(shownNow, reportedMs);
+      splayer.fetchedAt = now;
+    } else {
+      // audio is playing but still behind us: hold until it catches up
+      splayer.isPlaying = false;
+      splayer.progressMs = shownNow;
+      splayer.fetchedAt = now;
+    }
+    return;
+  }
   const shown = splayerCurrentMs();
   const withinGrace = now - splayer.stateChangedAt < SPLAYER_GRACE_MS;
   const playing = withinGrace ? splayer.isPlaying : reportedPlaying;
@@ -4138,7 +4169,7 @@ function updateSplayerPlayButton() {
   const el = document.getElementById("dt-splayer");
   if (!el) return;
   const btn = el.querySelector('.sp-btn[data-act="playpause"]');
-  if (btn) btn.innerHTML = splayerIcon(splayer.isPlaying ? "pause" : "play");
+  if (btn) btn.innerHTML = splayerIcon((splayer.isPlaying || splayer.resuming) ? "pause" : "play");
 }
 
 // Toggle just the heart state in place (no full rebuild -> keeps lyric scroll).
@@ -4238,7 +4269,7 @@ function renderSpotifyPlayer() {
   const art = t.album && t.album.images && t.album.images[0] ? t.album.images[0].url : "";
   const artists = (t.artists || []).map((a) => a.name).join(", ");
   const label = splayer.isLast ? "last played:" : "now playing:";
-  const playIcon = splayer.isPlaying ? "pause" : "play";
+  const playIcon = (splayer.isPlaying || splayer.resuming) ? "pause" : "play";
   const albumsHtml = splayer.albums
     .map((al) => {
       const img = al.images && al.images[0] ? al.images[0].url : "";
@@ -4293,25 +4324,58 @@ async function splayerControl(act) {
     return;
   }
   if (act === "playpause") {
-    // Optimistic toggle: freeze/resume the local clock immediately so the
-    // widget and lyrics stop/start in lockstep with Spotify instead of coasting
-    // until the request round-trips back. Snapshot the current position first
-    // (before flipping isPlaying, which splayerCurrentMs depends on).
-    const willPlay = !splayer.isPlaying;
+    const showingPlaying = splayer.isPlaying || splayer.resuming;
+    if (!showingPlaying) {
+      // Resume: start advancing immediately for a smooth start, and mark
+      // 'resuming' so the reconcile can freeze us (forward-only) if Spotify turns
+      // out not to have resumed yet. Snapshot the position before flipping
+      // isPlaying, which splayerCurrentMs depends on.
+      splayer.progressMs = splayerCurrentMs();
+      splayer.isPlaying = true;
+      splayer.resuming = true;
+      splayer.fetchedAt = Date.now();
+      splayer.stateChangedAt = Date.now();
+      updateSplayerPlayButton();
+      updateSplayerProgress();
+      await spotifyReq("/me/player/play", "PUT");
+      confirmSplayerResume();
+      return;
+    }
+    // Pause (also cancels a pending resume). Freeze the clock immediately at the
+    // current position so the lyrics stop in lockstep with Spotify.
+    splayer.resuming = false;
     const dur = splayer.durationMs || Infinity;
     splayer.progressMs = Math.min(splayerCurrentMs(), dur);
-    splayer.isPlaying = willPlay;
+    splayer.isPlaying = false;
     splayer.fetchedAt = Date.now();
     splayer.stateChangedAt = Date.now(); // start the grace window (see reconcile)
     updateSplayerPlayButton();
     updateSplayerProgress();
-    await spotifyReq(willPlay ? "/me/player/play" : "/me/player/pause", "PUT");
-    setTimeout(refreshSpotifyPlayer, 350); // reconcile exact position with Spotify
+    await spotifyReq("/me/player/pause", "PUT");
+    setTimeout(refreshSpotifyPlayer, 350); // reconcile exact stop point with Spotify
     return;
   }
   if (act === "prev") await spotifyReq("/me/player/previous", "POST");
   else if (act === "next") await spotifyReq("/me/player/next", "POST");
   setTimeout(refreshSpotifyPlayer, 350); // let Spotify apply, then re-sync
+}
+
+// Poll quickly after an unpause until Spotify confirms it actually resumed; the
+// reconcile then flips resuming -> playing and anchors to the real position.
+async function confirmSplayerResume() {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 10 && splayer.resuming; i++) {
+    await refreshSpotifyPlayer();
+    if (!splayer.resuming) return;
+    await sleep(300);
+  }
+  // Fallback after ~3s so we never get stuck frozen if confirmation never lands.
+  if (splayer.resuming) {
+    splayer.resuming = false;
+    splayer.isPlaying = true;
+    splayer.fetchedAt = Date.now();
+    refreshSpotifyPlayer();
+  }
 }
 
 // Wire the connect/disconnect button + initialize (desktop only).
