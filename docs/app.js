@@ -4835,20 +4835,11 @@ function applyPageLayout() {
   setVar("--dt-clock", colors.clock);
   setVar("--dt-btn-primary", colors.primary);
   setVar("--dt-btn-secondary", colors.secondary);
-  // Page-wide text color: override --text on the dashboard subtree only, so it
-  // recolors the headings / title / task text (everything that inherits --text)
-  // without touching mobile pages or the fixed #fff button + clock text. Cleared
-  // -> removed, falling back to the theme's --text.
-  const dtRootEl = document.getElementById("dt-root");
-  if (dtRootEl) {
-    if (colors.text) {
-      dtRootEl.style.color = colors.text; // inheriting text (headings, title)
-      dtRootEl.style.setProperty("--text", colors.text); // explicit color:var(--text) (task text, etc.)
-    } else {
-      dtRootEl.style.color = "";
-      dtRootEl.style.removeProperty("--text");
-    }
-  }
+  // Per-category text colors: headings (.dt-h2) and task info (task-name text)
+  // get their own swatches; the CSS applies these vars scoped to the dashboard.
+  // All other text stays theme-colored and can be recolored via highlight+format.
+  setVar("--dt-heading", colors.heading);
+  setVar("--dt-task", colors.task);
 
   const dash = document.querySelector(".dt-dashboard");
   // New model: independent left/right margins act as the outer column borders,
@@ -5403,7 +5394,9 @@ function syncPageEditColorInputs() {
   set("pe-clock", colors.clock || "#16171a");
   set("pe-primary", colors.primary || toHex(cs.getPropertyValue("--input-bg")) || "#35363b");
   set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
-  set("pe-textcolor", colors.text || toHex(cs.getPropertyValue("--text")) || "#e9e9ee");
+  const textHex = toHex(cs.getPropertyValue("--text")) || "#1b1c1f";
+  set("pe-heading", colors.heading || textHex);
+  set("pe-task", colors.task || textHex);
 }
 
 // Seed the banner toggle + background-image controls from saved state.
@@ -5660,7 +5653,7 @@ function initEditMenu() {
   if (!menu) return;
 
   // per-device color swatches
-  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary", "pe-textcolor": "text" };
+  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary", "pe-heading": "heading", "pe-task": "task" };
   for (const [id, key] of Object.entries(colorInputs)) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -5680,10 +5673,13 @@ function initEditMenu() {
       syncPageEditColorInputs();
     });
   }
-  const textReset = document.getElementById("pe-textcolor-reset");
+  const textReset = document.getElementById("pe-textcolors-reset");
   if (textReset) {
     textReset.addEventListener("click", () => {
-      if (deviceStyle.colors) delete deviceStyle.colors.text;
+      if (deviceStyle.colors) {
+        delete deviceStyle.colors.heading;
+        delete deviceStyle.colors.task;
+      }
       saveDeviceStyle();
       applyPageLayout();
       syncPageEditColorInputs();
