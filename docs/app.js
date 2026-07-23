@@ -4208,7 +4208,7 @@ function updateSplayerProgress() {
   // scroll the lyrics so the current line lands in place just before it's sung
   const scroll = el.querySelector(".sp-lyrics-scroll");
   if (splayer.lyrics && splayer.lyrics.length && scroll) {
-    const LEAD = 950; // begin the scroll ~this long before the line is sung (500ms ahead of the previous 450ms tuning)
+    const LEAD = 1450; // begin the scroll ~this long before the line is sung (500ms ahead of the previous 450ms tuning)
     let idx = 0;
     for (let i = 0; i < splayer.lyrics.length; i++) {
       if (splayer.lyrics[i].time <= p + LEAD) idx = i;
