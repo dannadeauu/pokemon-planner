@@ -2054,7 +2054,7 @@ body.theme-dark .dex-cell.undiscovered img {
     align-self: stretch;
   }
   .dt-team-col.pt-teambar-glass {
-    background: color-mix(in srgb, var(--pt-teambar, #ffffff) 22%, transparent);
+    background: color-mix(in srgb, var(--pt-teambar, #ffffff) var(--pt-teambar-glass-op, 22%), transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28);
@@ -2101,7 +2101,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--pt-taskitem, var(--card));
   }
   .dt-tasks.pt-taskitem-glass .todo-item {
-    background: color-mix(in srgb, var(--pt-taskitem, #ffffff) 22%, transparent);
+    background: color-mix(in srgb, var(--pt-taskitem, #ffffff) var(--pt-taskitem-glass-op, 22%), transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28);
@@ -2110,7 +2110,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--pt-taskbar, var(--input-bg));
   }
   .dt-tasks.pt-taskbar-glass .add-row input {
-    background: color-mix(in srgb, var(--pt-taskbar, #ffffff) 22%, transparent);
+    background: color-mix(in srgb, var(--pt-taskbar, #ffffff) var(--pt-taskbar-glass-op, 22%), transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28);
@@ -3852,6 +3852,34 @@ body.theme-dark .dex-cell.undiscovered img {
     accent-color: var(--color-add);
     cursor: pointer;
   }
+  /* groups a surface's color/glass row with its (glass-only) opacity slider */
+  .dt-wc-ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dt-wc-opacity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    padding-left: 2px;
+  }
+  .dt-wc-opacity.hidden {
+    display: none;
+  }
+  .dt-wc-opacity input[type="range"] {
+    flex: 1;
+    accent-color: var(--color-add);
+    cursor: pointer;
+  }
+  .dt-wc-opval {
+    width: 34px;
+    text-align: right;
+    color: var(--text);
+  }
 
   /* ---- per-widget tint + glassmorphism applied to widget surfaces ---- */
   .dt-widget.w-tint .dt-clock-box,
@@ -3882,7 +3910,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget.widget-glass .sp-top,
   .dt-widget.widget-glass .sp-bottom,
   .dt-widget.widget-glass .sp-connect {
-    background: color-mix(in srgb, var(--wbg, #ffffff) 22%, transparent) !important;
+    background: color-mix(in srgb, var(--wbg, #ffffff) var(--wglass-op, 22%), transparent) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28) !important;
@@ -3898,19 +3926,19 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-widget[data-widget="habit"].widget-glass .dt-habit-box,
   .dt-widget[data-widget="habit"].hb-box-glass .dt-habit-box {
-    background: color-mix(in srgb, var(--habit-box-bg, var(--wbg, #ffffff)) 22%, transparent) !important;
+    background: color-mix(in srgb, var(--habit-box-bg, var(--wbg, #ffffff)) var(--habit-box-glass-op, 22%), transparent) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28) !important;
   }
   .dt-widget.hb-day-glass .habit-day {
-    background: color-mix(in srgb, var(--habit-day-bg, #ffffff) 22%, transparent);
+    background: color-mix(in srgb, var(--habit-day-bg, #ffffff) var(--habit-day-glass-op, 22%), transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28);
   }
   .dt-widget.hb-check-glass .habit-check {
-    background: color-mix(in srgb, var(--habit-check-bg, #ffffff) 22%, transparent);
+    background: color-mix(in srgb, var(--habit-check-bg, #ffffff) var(--habit-check-glass-op, 22%), transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28);

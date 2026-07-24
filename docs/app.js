@@ -5872,14 +5872,14 @@ const CUSTOM_ENTRY_IDS = ["pt"];
 // a background color swatch + a glass checkbox, stored under widgetStyles[id].
 const WIDGET_SURFACES = {
   habit: [
-    { label: "background box", bgKey: "boxBg", glassKey: "boxGlass" },
-    { label: "day boxes", bgKey: "dayBg", glassKey: "dayGlass" },
-    { label: "habit boxes", bgKey: "checkBg", glassKey: "checkGlass" },
+    { label: "background box", bgKey: "boxBg", glassKey: "boxGlass", opacityKey: "boxGlassOpacity", opacityVar: "--habit-box-glass-op" },
+    { label: "day boxes", bgKey: "dayBg", glassKey: "dayGlass", opacityKey: "dayGlassOpacity", opacityVar: "--habit-day-glass-op" },
+    { label: "habit boxes", bgKey: "checkBg", glassKey: "checkGlass", opacityKey: "checkGlassOpacity", opacityVar: "--habit-check-glass-op" },
   ],
   pt: [
-    { label: "team bar background", bgKey: "teambarBg", glassKey: "teambarGlass" },
-    { label: "task list items", bgKey: "taskitemBg", glassKey: "taskitemGlass" },
-    { label: "task bar", bgKey: "taskbarBg", glassKey: "taskbarGlass" },
+    { label: "team bar background", bgKey: "teambarBg", glassKey: "teambarGlass", opacityKey: "teambarGlassOpacity", opacityVar: "--pt-teambar-glass-op" },
+    { label: "task list items", bgKey: "taskitemBg", glassKey: "taskitemGlass", opacityKey: "taskitemGlassOpacity", opacityVar: "--pt-taskitem-glass-op" },
+    { label: "task bar", bgKey: "taskbarBg", glassKey: "taskbarGlass", opacityKey: "taskbarGlassOpacity", opacityVar: "--pt-taskbar-glass-op" },
   ],
 };
 const DEFAULT_WIDGET_ORDER = { mid: ["clock", "habit"], right: ["spotify", "pokepark"] };
@@ -5943,10 +5943,12 @@ function applyWidgetStyles() {
     const el = widgetEl(id);
     if (!el) continue;
     const s = widgetStyleOf(id);
+    const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
     if (s.bg) el.style.setProperty("--wbg", s.bg);
     else el.style.removeProperty("--wbg");
     if (s.text) el.style.setProperty("--wtext", s.text);
     else el.style.removeProperty("--wtext");
+    el.style.setProperty("--wglass-op", glassOpacityOf(ws, "glassOpacity") + "%");
     el.classList.toggle("w-tint", !!s.bg && !s.glass);
     el.classList.toggle("w-text", !!s.text);
     el.classList.toggle("widget-glass", s.glass);
@@ -5967,6 +5969,9 @@ function applyHabitPartStyles() {
   setRootVar("--habit-box-bg", s.boxBg);
   setRootVar("--habit-day-bg", s.dayBg);
   setRootVar("--habit-check-bg", s.checkBg);
+  rootStyle().setProperty("--habit-box-glass-op", glassOpacityOf(s, "boxGlassOpacity") + "%");
+  rootStyle().setProperty("--habit-day-glass-op", glassOpacityOf(s, "dayGlassOpacity") + "%");
+  rootStyle().setProperty("--habit-check-glass-op", glassOpacityOf(s, "checkGlassOpacity") + "%");
   const el = widgetEl("habit");
   if (el) {
     el.classList.toggle("hb-box-glass", !!s.boxGlass);
@@ -5981,6 +5986,9 @@ function applyPokemonTasksStyles() {
   setRootVar("--pt-teambar", s.teambarBg);
   setRootVar("--pt-taskitem", s.taskitemBg);
   setRootVar("--pt-taskbar", s.taskbarBg);
+  rootStyle().setProperty("--pt-teambar-glass-op", glassOpacityOf(s, "teambarGlassOpacity") + "%");
+  rootStyle().setProperty("--pt-taskitem-glass-op", glassOpacityOf(s, "taskitemGlassOpacity") + "%");
+  rootStyle().setProperty("--pt-taskbar-glass-op", glassOpacityOf(s, "taskbarGlassOpacity") + "%");
   const team = document.querySelector(".dt-team-col");
   if (team) team.classList.toggle("pt-teambar-glass", !!s.teambarGlass);
   const tasks = document.querySelector(".dt-tasks");
@@ -6049,9 +6057,20 @@ function setWidgetStyleProp(id, key, value) {
   applyWidgetStyles();
 }
 
-// A background color swatch + glass checkbox (a "surface" control).
+// Default glass fill opacity (matches the CSS color-mix fallback).
+const GLASS_OPACITY_DEFAULT = 22;
+function glassOpacityOf(ws, key) {
+  const v = ws && ws[key];
+  return typeof v === "number" ? Math.max(0, Math.min(100, v)) : GLASS_OPACITY_DEFAULT;
+}
+
+// A background color swatch + glass checkbox (a "surface" control). When glass is
+// on, a fill-opacity slider (0% colorless → 100% opaque, reflection kept) shows.
 function makeSurfaceCtrl(id, surf) {
   const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
+  const wrap = document.createElement("div");
+  wrap.className = "dt-wc-ctrl";
+
   const row = document.createElement("div");
   row.className = "dt-wc-row";
   row.innerHTML =
@@ -6060,9 +6079,30 @@ function makeSurfaceCtrl(id, surf) {
     `<label class="dt-wc-glass"><input type="checkbox"${ws[surf.glassKey] ? " checked" : ""} /><span>glass</span></label>`;
   const color = row.querySelector('input[type="color"]');
   const glass = row.querySelector('input[type="checkbox"]');
+
+  const op = glassOpacityOf(ws, surf.opacityKey);
+  const opRow = document.createElement("label");
+  opRow.className = "dt-wc-opacity" + (ws[surf.glassKey] ? "" : " hidden");
+  opRow.innerHTML =
+    `<span>fill opacity</span>` +
+    `<input type="range" min="0" max="100" step="1" value="${op}" />` +
+    `<span class="dt-wc-opval">${op}%</span>`;
+  const slider = opRow.querySelector('input[type="range"]');
+  const opVal = opRow.querySelector(".dt-wc-opval");
+
   color.addEventListener("input", () => setWidgetStyleProp(id, surf.bgKey, color.value));
-  glass.addEventListener("change", () => setWidgetStyleProp(id, surf.glassKey, glass.checked));
-  return row;
+  glass.addEventListener("change", () => {
+    setWidgetStyleProp(id, surf.glassKey, glass.checked);
+    opRow.classList.toggle("hidden", !glass.checked);
+  });
+  slider.addEventListener("input", () => {
+    opVal.textContent = slider.value + "%";
+    setWidgetStyleProp(id, surf.opacityKey, parseInt(slider.value, 10));
+  });
+
+  wrap.appendChild(row);
+  wrap.appendChild(opRow);
+  return wrap;
 }
 
 // A plain text color swatch (no glass — glass isn't meaningful for text).
@@ -6139,7 +6179,7 @@ function renderWidgetList() {
     const body = document.createElement("div");
     body.className = "dt-wacc-body";
     if (isReal) {
-      body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass" }));
+      body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass", opacityKey: "glassOpacity", opacityVar: "--wglass-op" }));
       body.appendChild(makeTextCtrl(id));
     }
     for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
