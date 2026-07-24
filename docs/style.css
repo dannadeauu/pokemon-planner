@@ -3587,6 +3587,9 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     flex-direction: column;
     gap: 0px;
+    /* round the outer corners on the sections themselves so the bottom stays
+       rounded even when glass (backdrop-filter) defeats the parent's clip */
+    border-radius: 22px 22px 0 0;
   }
   .sp-label {
     font-size: 14px;
@@ -3704,6 +3707,7 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: flex-start;
     justify-content: space-between; /* lyrics left, covers right */
     flex-wrap: wrap;
+    border-radius: 0 0 22px 22px; /* keep the bottom corners rounded like the top */
   }
   .sp-lyrics {
     flex: 1 1 150px;
@@ -3780,6 +3784,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--sp-top);
     text-align: center;
     padding: 26px 0;
+    border-radius: 22px; /* standalone prompt: round all corners */
   }
   .sp-connect .sp-label {
     margin-bottom: 10px;
