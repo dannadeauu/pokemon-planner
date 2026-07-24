@@ -3443,7 +3443,7 @@ body.theme-dark .dex-cell.undiscovered img {
     gap: 0px;
   }
   .sp-label {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 800;
     color: #fff;
   }
@@ -3477,7 +3477,7 @@ body.theme-dark .dex-cell.undiscovered img {
     width: 100%;
   }
   .sp-title {
-    font-size: 17px;
+    font-size: 14px;
     font-weight: 800;
     color: #fff;
     white-space: nowrap;
@@ -3485,7 +3485,7 @@ body.theme-dark .dex-cell.undiscovered img {
     text-overflow: ellipsis;
   }
   .sp-artist {
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
     opacity: 0.9;
