@@ -5864,10 +5864,11 @@ const WIDGET_NAMES = {
   spotify2: "spotify player",
   pokepark: "pokepark",
   pt: "pokemon & tasks",
+  cal: "calendar",
 };
-// "pokemon & tasks" is a settings-only entry (no toggle / drag): the team bar
-// and task list are always-present structural parts of the page.
-const CUSTOM_ENTRY_IDS = ["pt"];
+// "pokemon & tasks" / "calendar" are settings-only entries (no toggle / drag):
+// their parts are always-present structural pieces of the page.
+const CUSTOM_ENTRY_IDS = ["pt", "cal"];
 // Extra per-part surface controls beyond the generic fill/text. Each surface is
 // a background color swatch + a glass checkbox, stored under widgetStyles[id].
 const WIDGET_SURFACES = {
@@ -5880,6 +5881,11 @@ const WIDGET_SURFACES = {
     { label: "team bar background", bgKey: "teambarBg", glassKey: "teambarGlass", opacityKey: "teambarGlassOpacity", opacityVar: "--pt-teambar-glass-op" },
     { label: "task list items", bgKey: "taskitemBg", glassKey: "taskitemGlass", opacityKey: "taskitemGlassOpacity", opacityVar: "--pt-taskitem-glass-op" },
     { label: "task bar", bgKey: "taskbarBg", glassKey: "taskbarGlass", opacityKey: "taskbarGlassOpacity", opacityVar: "--pt-taskbar-glass-op" },
+  ],
+  cal: [
+    { label: "calendar box", bgKey: "calBg", glassKey: "calGlass", opacityKey: "calGlassOpacity", opacityVar: "--cal-box-glass-op" },
+    { label: "task box", bgKey: "taskBg", glassKey: "taskGlass", opacityKey: "taskGlassOpacity", opacityVar: "--cal-tasks-glass-op" },
+    { label: "day cells", bgKey: "dayBg", glassKey: "dayGlass", opacityKey: "dayGlassOpacity", opacityVar: "--cal-day-glass-op" },
   ],
 };
 const DEFAULT_WIDGET_ORDER = { mid: ["clock", "habit"], right: ["spotify", "pokepark"] };
@@ -5955,6 +5961,7 @@ function applyWidgetStyles() {
   }
   applyHabitPartStyles();
   applyPokemonTasksStyles();
+  applyCalendarStyles();
 }
 
 const rootStyle = () => document.documentElement.style;
@@ -5996,6 +6003,29 @@ function applyPokemonTasksStyles() {
     tasks.classList.toggle("pt-taskitem-glass", !!s.taskitemGlass);
     tasks.classList.toggle("pt-taskbar-glass", !!s.taskbarGlass);
   }
+}
+
+// "calendar" entry: the calendar box + task box surfaces, the day cells, and the
+// month / label text colors. Glass toggles live on the (persistent) container
+// elements so they survive the calendar's innerHTML re-renders; the day-cell
+// glass rides on the calendar container so rebuilt cells still pick it up.
+function applyCalendarStyles() {
+  const s = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.cal) || {};
+  setRootVar("--cal-box-bg", s.calBg);
+  setRootVar("--cal-tasks-bg", s.taskBg);
+  setRootVar("--cal-day-bg", s.dayBg);
+  setRootVar("--cal-month-color", s.monthColor);
+  setRootVar("--cal-label-color", s.labelColor);
+  rootStyle().setProperty("--cal-box-glass-op", glassOpacityOf(s, "calGlassOpacity") + "%");
+  rootStyle().setProperty("--cal-tasks-glass-op", glassOpacityOf(s, "taskGlassOpacity") + "%");
+  rootStyle().setProperty("--cal-day-glass-op", glassOpacityOf(s, "dayGlassOpacity") + "%");
+  const cal = document.getElementById("dt-calendar");
+  if (cal) {
+    cal.classList.toggle("cal-box-glass", !!s.calGlass);
+    cal.classList.toggle("cal-day-glass", !!s.dayGlass);
+  }
+  const taskBox = document.getElementById("dt-cal-tasks");
+  if (taskBox) taskBox.classList.toggle("cal-tasks-glass", !!s.taskGlass);
 }
 
 // Extra vertical space added between stacked widgets, on top of each widget's
@@ -6118,6 +6148,26 @@ function makeTextCtrl(id) {
   return row;
 }
 
+// A named text-color swatch stored under widgetStyles[id][key]. Seeds from the
+// saved color or a computed default CSS var (e.g. --text / --muted).
+function makeWidgetTextCtrl(id, label, key, defaultVar) {
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
+  const cs = getComputedStyle(document.documentElement);
+  const toHex = (c) => {
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
+    return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
+  };
+  const fallback = toHex(cs.getPropertyValue(defaultVar)) || "#888888";
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<span class="dt-wc-rowlabel">${label}</span>` +
+    `<label class="dt-wc-swatch"><input type="color" value="${ws[key] || fallback}" /><span>color</span></label>`;
+  const color = row.querySelector('input[type="color"]');
+  color.addEventListener("input", () => setWidgetStyleProp(id, key, color.value));
+  return row;
+}
+
 // Task-name text colors live on the dashboard (deviceStyle.colors), but their
 // controls sit in the "pokemon & tasks" dropdown. `colorKey` is "task" (the task
 // name text) or "taskDone" (done / crossed-out tasks); the swatch seeds from the
@@ -6186,6 +6236,10 @@ function renderWidgetList() {
     if (id === "pt") {
       body.appendChild(makeTaskTextCtrl("task info", "task"));
       body.appendChild(makeTaskTextCtrl("crossed out tasks", "taskDone"));
+    }
+    if (id === "cal") {
+      body.appendChild(makeWidgetTextCtrl("cal", "month text", "monthColor", "--text"));
+      body.appendChild(makeWidgetTextCtrl("cal", "numbers & day labels", "labelColor", "--muted"));
     }
 
     acc.appendChild(head);

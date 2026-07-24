@@ -2394,9 +2394,23 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 20px 22px;
     display: flex;
     flex-direction: column;
+    background: var(--cal-box-bg, var(--dt-btn-secondary, var(--team-card)));
+  }
+  .dt-calendar.cal-box-glass {
+    background: color-mix(in srgb, var(--cal-box-bg, #ffffff) var(--cal-box-glass-op, 22%), transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
   }
   .dt-cal-tasks {
     min-height: 440px;
+    background: var(--cal-tasks-bg, var(--dt-btn-secondary, var(--team-card)));
+  }
+  .dt-cal-tasks.cal-tasks-glass {
+    background: color-mix(in srgb, var(--cal-tasks-bg, #ffffff) var(--cal-tasks-glass-op, 22%), transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
   }
   .dt-cal-month {
     font-size: 20px;
@@ -2406,6 +2420,9 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+  }
+  .dt-cal-month-name {
+    color: var(--cal-month-color, inherit); /* "month text" swatch (calendar) */
   }
   .dt-cal-tabs {
     display: inline-flex;
@@ -2436,14 +2453,14 @@ body.theme-dark .dex-cell.undiscovered img {
     text-align: center;
     font-size: 12px;
     font-weight: 700;
-    color: var(--muted);
+    color: var(--cal-label-color, var(--muted));
     padding-bottom: 4px;
   }
   .dt-cal-day {
     display: flex;
     flex-direction: column;
     border-radius: 8px;
-    background: var(--card);
+    background: var(--cal-day-bg, var(--card));
     min-height: 92px;
     padding: 6px;
     cursor: pointer;
@@ -2453,11 +2470,18 @@ body.theme-dark .dex-cell.undiscovered img {
     background: transparent;
     cursor: default;
   }
+  /* day-cell glass rides on the calendar container so rebuilt cells inherit it */
+  .dt-calendar.cal-day-glass .dt-cal-day:not(.empty) {
+    background: color-mix(in srgb, var(--cal-day-bg, #ffffff) var(--cal-day-glass-op, 22%), transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+  }
   .dt-cal-daynum {
     align-self: flex-end;
     font-size: 12px;
     font-weight: 700;
-    color: var(--muted);
+    color: var(--cal-label-color, var(--muted));
     margin-bottom: 4px;
     flex-shrink: 0;
   }
