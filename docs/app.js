@@ -4262,7 +4262,14 @@ function splayerIcon(name) {
   return '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">' + (paths[name] || "") + "</svg>";
 }
 
+// Wrapper: after any render path (connect / empty / now-playing) re-add the
+// resize handle in edit mode, since each path rebuilds the player's innerHTML
+// and drops the handle child.
 function renderSpotifyPlayer() {
+  renderSpotifyPlayerBody();
+  if (pageEditMode) buildItemHandles();
+}
+function renderSpotifyPlayerBody() {
   const el = document.getElementById("dt-splayer");
   if (!el) return;
   if (!spotifyAuth) {
@@ -4489,9 +4496,14 @@ const PAGE_ITEMS = [
   { id: "habit", sel: ".dt-habit-box" },
   { id: "embed", sel: ".dt-embed" },
   { id: "park", sel: ".dt-park-box" },
+  { id: "splayer", sel: ".dt-splayer" },
   { id: "calendar", sel: ".dt-calendar" },
   { id: "calTasks", sel: ".dt-cal-tasks" },
 ];
+// Items whose height acts as a minimum (content can grow past it) rather than a
+// hard clip — the habit box (wrapping month dots) and the spotify player (its
+// lyrics/albums have their own layout we don't want to cut off).
+const MIN_HEIGHT_ITEMS = ["habit", "splayer"];
 
 function pageLayout() {
   if (!uiPrefs.pageLayout || typeof uiPrefs.pageLayout !== "object") uiPrefs.pageLayout = {};
@@ -4882,9 +4894,9 @@ function applyPageLayout() {
       // spill past the edge / into another column after a refresh or resize
       if (size.w) el.style.width = Math.min(size.w, itemMaxWidth(el)) + "px";
       if (size.h) {
-        if (item.id === "habit") {
-          // the habit box treats its size as a minimum so wrapping month dots
-          // can extend it instead of overflowing
+        if (MIN_HEIGHT_ITEMS.includes(item.id)) {
+          // treat the saved height as a minimum so content (wrapping month dots /
+          // the player's lyrics + albums) can extend it instead of being clipped
           el.style.minHeight = size.h + "px";
           el.style.height = "auto";
         } else {
@@ -4897,7 +4909,7 @@ function applyPageLayout() {
     } else {
       el.style.width = "";
       el.style.height = "";
-      if (item.id === "habit") el.style.minHeight = "";
+      if (MIN_HEIGHT_ITEMS.includes(item.id)) el.style.minHeight = "";
       el.style.marginLeft = "";
       el.style.marginRight = "";
       el.style.flex = "";
@@ -5304,8 +5316,8 @@ function buildItemHandles() {
           const w = Math.min(maxW, Math.max(80, rect.width + dx));
           const h = Math.max(60, rect.height + dy);
           el.style.width = w + "px";
-          if (item.id === "habit") {
-            // min-height so the box can still stretch for wrapping month dots
+          if (MIN_HEIGHT_ITEMS.includes(item.id)) {
+            // min-height so the box can still stretch for its own content
             el.style.minHeight = h + "px";
             el.style.height = "auto";
           } else {
