@@ -1492,7 +1492,11 @@ h1 {
 }
 
 .dex-card {
-  flex: 1;
+  /* size to the pokemon grid so the card ends just below the last row (with the
+     grid's 10px bottom padding); when the grid is taller than the screen it
+     shrinks to the available space and scrolls. Same on every tab. */
+  flex: 0 1 auto;
+  min-height: 0;
   background: var(--team-card);
   border-radius: 24px 24px 0 0;
   overflow-y: auto;
@@ -1504,7 +1508,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 10px;
-  padding: 16px 16px 100px;
+  padding: 16px 16px 10px;
 }
 
 .dex-cell {
@@ -2129,6 +2133,17 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-tasks .todo-item .text {
     color: var(--dt-task, inherit);
   }
+  /* the "add a task" input (+ placeholder) and the ✕ delete buttons follow the
+     task-info color too */
+  .dt-tasks .add-row input {
+    color: var(--dt-task, var(--text));
+  }
+  .dt-tasks .add-row input::placeholder {
+    color: var(--dt-task, var(--muted));
+  }
+  .dt-tasks .delete-btn {
+    color: var(--dt-task, var(--muted));
+  }
   .dt-tasks .todo-item.status-done .text {
     color: var(--dt-task-done, var(--muted));
   }
@@ -2151,6 +2166,10 @@ body.theme-dark .dex-cell.undiscovered img {
     font-weight: 800;
     letter-spacing: 1px;
     font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
+    /* keep the digits centered vertically as the box grows on resize */
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .dt-ampm {
     position: absolute;
