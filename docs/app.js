@@ -6015,7 +6015,8 @@ function applyCalendarStyles() {
   setRootVar("--cal-tasks-bg", s.taskBg);
   setRootVar("--cal-day-bg", s.dayBg);
   setRootVar("--cal-month-color", s.monthColor);
-  setRootVar("--cal-label-color", s.labelColor);
+  setRootVar("--cal-num-color", s.numColor);
+  setRootVar("--cal-dow-color", s.dowColor);
   rootStyle().setProperty("--cal-box-glass-op", glassOpacityOf(s, "calGlassOpacity") + "%");
   rootStyle().setProperty("--cal-tasks-glass-op", glassOpacityOf(s, "taskGlassOpacity") + "%");
   rootStyle().setProperty("--cal-day-glass-op", glassOpacityOf(s, "dayGlassOpacity") + "%");
@@ -6094,17 +6095,29 @@ function glassOpacityOf(ws, key) {
   return typeof v === "number" ? Math.max(0, Math.min(100, v)) : GLASS_OPACITY_DEFAULT;
 }
 
+// A labelled control group: the label acts as a heading, and its setting
+// field(s) are indented beneath it for clarity.
+function wcCtrl(label, ...fieldEls) {
+  const wrap = document.createElement("div");
+  wrap.className = "dt-wc-ctrl";
+  const head = document.createElement("div");
+  head.className = "dt-wc-head";
+  head.textContent = label;
+  const fields = document.createElement("div");
+  fields.className = "dt-wc-fields";
+  for (const f of fieldEls) if (f) fields.appendChild(f);
+  wrap.appendChild(head);
+  wrap.appendChild(fields);
+  return wrap;
+}
+
 // A background color swatch + glass checkbox (a "surface" control). When glass is
 // on, a fill-opacity slider (0% colorless → 100% opaque, reflection kept) shows.
 function makeSurfaceCtrl(id, surf) {
   const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
-  const wrap = document.createElement("div");
-  wrap.className = "dt-wc-ctrl";
-
   const row = document.createElement("div");
   row.className = "dt-wc-row";
   row.innerHTML =
-    `<span class="dt-wc-rowlabel">${surf.label}</span>` +
     `<label class="dt-wc-swatch"><input type="color" value="${ws[surf.bgKey] || "#ffffff"}" /><span>color</span></label>` +
     `<label class="dt-wc-glass"><input type="checkbox"${ws[surf.glassKey] ? " checked" : ""} /><span>glass</span></label>`;
   const color = row.querySelector('input[type="color"]');
@@ -6130,9 +6143,7 @@ function makeSurfaceCtrl(id, surf) {
     setWidgetStyleProp(id, surf.opacityKey, parseInt(slider.value, 10));
   });
 
-  wrap.appendChild(row);
-  wrap.appendChild(opRow);
-  return wrap;
+  return wcCtrl(surf.label, row, opRow);
 }
 
 // A plain text color swatch (no glass — glass isn't meaningful for text).
@@ -6141,11 +6152,10 @@ function makeTextCtrl(id) {
   const row = document.createElement("div");
   row.className = "dt-wc-row";
   row.innerHTML =
-    `<span class="dt-wc-rowlabel">text</span>` +
     `<label class="dt-wc-swatch"><input type="color" value="${ws.text || "#ffffff"}" /><span>color</span></label>`;
   const color = row.querySelector('input[type="color"]');
   color.addEventListener("input", () => setWidgetStyleProp(id, "text", color.value));
-  return row;
+  return wcCtrl("text", row);
 }
 
 // A named text-color swatch stored under widgetStyles[id][key]. Seeds from the
@@ -6161,11 +6171,10 @@ function makeWidgetTextCtrl(id, label, key, defaultVar) {
   const row = document.createElement("div");
   row.className = "dt-wc-row";
   row.innerHTML =
-    `<span class="dt-wc-rowlabel">${label}</span>` +
     `<label class="dt-wc-swatch"><input type="color" value="${ws[key] || fallback}" /><span>color</span></label>`;
   const color = row.querySelector('input[type="color"]');
   color.addEventListener("input", () => setWidgetStyleProp(id, key, color.value));
-  return row;
+  return wcCtrl(label, row);
 }
 
 // Task-name text colors live on the dashboard (deviceStyle.colors), but their
@@ -6186,7 +6195,6 @@ function makeTaskTextCtrl(label, colorKey) {
   const row = document.createElement("div");
   row.className = "dt-wc-row";
   row.innerHTML =
-    `<span class="dt-wc-rowlabel">${label}</span>` +
     `<label class="dt-wc-swatch"><input type="color" value="${colors[colorKey] || fallback}" /><span>color</span></label>`;
   const color = row.querySelector('input[type="color"]');
   color.addEventListener("input", () => {
@@ -6195,7 +6203,7 @@ function makeTaskTextCtrl(label, colorKey) {
     saveDeviceStyle();
     applyPageLayout();
   });
-  return row;
+  return wcCtrl(label, row);
 }
 
 // The widgets tab: each widget (+ the settings-only "pokemon & tasks" entry) is
@@ -6239,7 +6247,8 @@ function renderWidgetList() {
     }
     if (id === "cal") {
       body.appendChild(makeWidgetTextCtrl("cal", "month text", "monthColor", "--text"));
-      body.appendChild(makeWidgetTextCtrl("cal", "numbers & day labels", "labelColor", "--muted"));
+      body.appendChild(makeWidgetTextCtrl("cal", "numbers", "numColor", "--muted"));
+      body.appendChild(makeWidgetTextCtrl("cal", "day labels", "dowColor", "--muted"));
     }
 
     acc.appendChild(head);
