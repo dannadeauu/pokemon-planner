@@ -426,17 +426,30 @@
       </div>
     </div>
     <div class="dt-edit-body hidden" data-epane="text">
-      <div class="dt-edit-label" id="font-label">font</div>
+      <div class="dt-edit-label">headings font</div>
+      <div class="font-picker">
+        <button class="font-btn" id="font-heading-btn" type="button" aria-haspopup="true"></button>
+        <div class="font-menu hidden" id="font-heading-menu"></div>
+      </div>
+
+      <div class="dt-edit-label" id="font-label">body text font</div>
       <div class="font-picker">
         <button class="font-btn" id="font-btn" type="button" aria-haspopup="true"></button>
         <div class="font-menu hidden" id="font-menu"></div>
       </div>
+
+      <div class="dt-edit-label">clock font</div>
+      <div class="font-picker">
+        <button class="font-btn" id="font-clock-btn" type="button" aria-haspopup="true"></button>
+        <div class="font-menu hidden" id="font-clock-menu"></div>
+      </div>
+
       <div class="friends-toggle-row font-mobile-row hidden" id="font-mobile-row">
         <span class="friends-toggle-label">different font on mobile</span>
         <button class="friends-toggle" id="font-mobile-toggle" type="button" role="switch" aria-checked="false"></button>
       </div>
       <div class="font-mobile-section hidden" id="font-mobile-section">
-        <div class="dt-edit-label">mobile font</div>
+        <div class="dt-edit-label">mobile body font</div>
         <div class="font-picker">
           <button class="font-btn" id="font-mobile-btn" type="button" aria-haspopup="true"></button>
           <div class="font-menu hidden" id="font-mobile-menu"></div>

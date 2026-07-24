@@ -1838,6 +1838,7 @@ body.theme-dark .dex-cell.undiscovered img {
     line-height: 1.1;
     text-align: left;
     min-width: 0;
+    font-family: var(--font-heading, inherit); /* "headings font" (text tab) */
   }
   .dt-gear {
     flex: none;
@@ -1879,6 +1880,7 @@ body.theme-dark .dex-cell.undiscovered img {
     font-weight: 700;
     margin: 0 0 12px;
     color: var(--dt-heading, inherit); /* "headings" swatch (page-edit text tab) */
+    font-family: var(--font-heading, inherit); /* "headings font" (text tab) */
   }
 
   /* ---- top dashboard grid ---- */
@@ -2148,6 +2150,7 @@ body.theme-dark .dex-cell.undiscovered img {
     font-size: 46px;
     font-weight: 800;
     letter-spacing: 1px;
+    font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
   }
   .dt-ampm {
     position: absolute;
@@ -2157,6 +2160,7 @@ body.theme-dark .dex-cell.undiscovered img {
     font-weight: 700;
     letter-spacing: 1px;
     opacity: 0.7;
+    font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
   }
 
   /* ---- account / friends / settings buttons ---- */

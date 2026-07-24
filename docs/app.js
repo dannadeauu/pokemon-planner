@@ -433,6 +433,9 @@ const DEFAULT_SETTINGS = {
   font: "Baloo 2",
   fontMobile: "Baloo 2",
   differentFontMobile: false,
+  // per-role font overrides (null = inherit the base "body text" font)
+  fontHeading: null,
+  fontClock: null,
   pageEdit: false,
 };
 
@@ -459,23 +462,38 @@ function currentFontLabel() {
   return settings.font;
 }
 
-// Apply the chosen font app-wide: load it (if it needs downloading) and set the
-// document font so everything using `inherit` picks it up.
+// Add a stylesheet <link> for a Google font once (keyed by label); locally
+// available fonts (google: null) need no download.
+function ensureFontLoaded(font) {
+  if (!font || !font.google) return;
+  if (document.querySelector(`link[data-font-preload="${CSS.escape(font.label)}"]`)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.dataset.fontPreload = font.label;
+  link.href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
+  document.head.appendChild(link);
+}
+
+// Apply the chosen fonts: the base "body text" font (everything using `inherit`
+// picks it up) plus optional per-role overrides for headings and the clock,
+// exposed as CSS vars that fall back to the body font when unset.
 function applyFont() {
-  const font = appFontByLabel(currentFontLabel());
-  let link = document.getElementById("app-font-link");
-  if (font.google) {
-    const href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
-    if (!link) {
-      link = document.createElement("link");
-      link.id = "app-font-link";
-      link.rel = "stylesheet";
-      document.head.appendChild(link);
+  const bodyFont = appFontByLabel(currentFontLabel());
+  ensureFontLoaded(bodyFont);
+  document.documentElement.style.setProperty("--app-font", bodyFont.stack);
+  document.body.style.fontFamily = bodyFont.stack;
+
+  const setRoleFont = (varName, label) => {
+    if (label) {
+      const f = appFontByLabel(label);
+      ensureFontLoaded(f);
+      document.documentElement.style.setProperty(varName, f.stack);
+    } else {
+      document.documentElement.style.removeProperty(varName);
     }
-    if (link.href !== href) link.href = href;
-  }
-  document.documentElement.style.setProperty("--app-font", font.stack);
-  document.body.style.fontFamily = font.stack;
+  };
+  setRoleFont("--font-heading", settings.fontHeading);
+  setRoleFont("--font-clock", settings.fontClock);
 }
 
 function loadSettings() {
@@ -747,14 +765,7 @@ function buildFontMenu(menuId, currentLabel, onSelect) {
     opt.className = "font-option" + (f.label === currentLabel ? " active" : "");
     opt.textContent = f.label;
     opt.style.fontFamily = f.stack;
-    if (f.google && !document.querySelector(`link[data-font-preload="${f.label}"]`)) {
-      // preload once so the option renders in its real face
-      const pre = document.createElement("link");
-      pre.rel = "stylesheet";
-      pre.dataset.fontPreload = f.label;
-      pre.href = `https://fonts.googleapis.com/css2?family=${f.google}&display=swap`;
-      document.head.appendChild(pre);
-    }
+    ensureFontLoaded(f); // so the option renders in its real face
     opt.addEventListener("click", () => {
       onSelect(f.label);
       menu.classList.add("hidden");
@@ -789,6 +800,10 @@ function wireFontPicker(p) {
 }
 const MAIN_FONT_PICKER = { btnId: "font-btn", menuId: "font-menu", getVal: () => settings.font, setVal: (v) => { settings.font = v; } };
 const MOBILE_FONT_PICKER = { btnId: "font-mobile-btn", menuId: "font-mobile-menu", getVal: () => settings.fontMobile, setVal: (v) => { settings.fontMobile = v; } };
+// Per-role pickers: when a role has no explicit font it shows (and inherits) the
+// base body font.
+const HEADING_FONT_PICKER = { btnId: "font-heading-btn", menuId: "font-heading-menu", getVal: () => settings.fontHeading || settings.font, setVal: (v) => { settings.fontHeading = v; } };
+const CLOCK_FONT_PICKER = { btnId: "font-clock-btn", menuId: "font-clock-menu", getVal: () => settings.fontClock || settings.font, setVal: (v) => { settings.fontClock = v; } };
 
 // The "different font on mobile" toggle + mobile picker only make sense for a
 // signed-in account (they sync a separate font to phones), so they only show
@@ -807,7 +822,7 @@ function updateFontMobileUI() {
   const section = document.getElementById("font-mobile-section");
   if (section) section.classList.toggle("hidden", !on);
   const label = document.getElementById("font-label");
-  if (label) label.textContent = on ? "desktop font" : "font";
+  if (label) label.textContent = on ? "desktop body text font" : "body text font";
 }
 
 function initSettings() {
@@ -820,7 +835,9 @@ function initSettings() {
   updateMatchCompanionButtons();
   applyMatchCompanion();
 
+  wireFontPicker(HEADING_FONT_PICKER);
   wireFontPicker(MAIN_FONT_PICKER);
+  wireFontPicker(CLOCK_FONT_PICKER);
   wireFontPicker(MOBILE_FONT_PICKER);
   updateFontMobileUI();
   const fontMobileToggle = document.getElementById("font-mobile-toggle");
