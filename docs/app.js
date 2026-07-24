@@ -5374,6 +5374,17 @@ function setPageEdit(on) {
   applyEditability();
   teardownPageHandles();
   if (on) {
+    // The native resize grip only works when the menu is positioned by
+    // left/top. While it's anchored by right/bottom (its default corner) the
+    // bottom-right corner is pinned, so dragging the grip does nothing. Pin it
+    // to its current left/top so the grip is free to move.
+    if (menu && !menu.style.left) {
+      const r = menu.getBoundingClientRect();
+      menu.style.left = r.left + "px";
+      menu.style.top = r.top + "px";
+      menu.style.right = "auto";
+      menu.style.bottom = "auto";
+    }
     buildDashboardHandles();
     const calRow = document.querySelector(".dt-cal-row");
     if (calRow) buildColHandles(calRow, "calCols");
