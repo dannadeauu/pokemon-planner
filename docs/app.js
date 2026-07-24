@@ -4677,12 +4677,13 @@ function loadDeviceStyle() {
         widgetStyles: s.widgetStyles && typeof s.widgetStyles === "object" ? s.widgetStyles : {},
         widgetGap: typeof s.widgetGap === "number" ? s.widgetGap : null,
         bgImage: s.bgImage && typeof s.bgImage === "object" ? s.bgImage : null,
+        menuSize: s.menuSize && typeof s.menuSize === "object" ? s.menuSize : null,
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -5774,11 +5775,28 @@ function initEditMenu() {
         .querySelectorAll(".dt-edit-body[data-epane]")
         .forEach((p) => p.classList.toggle("hidden", p.dataset.epane !== name));
       if (name === "widgets") renderWidgetList();
-      if (name === "colors") renderWidgetColors();
     });
   });
   renderWidgetList();
   initWidgetDrag();
+
+  // persist the menu's resized dimensions (native `resize: both` grip)
+  if (deviceStyle.menuSize) {
+    if (deviceStyle.menuSize.w) menu.style.width = deviceStyle.menuSize.w + "px";
+    if (deviceStyle.menuSize.h) menu.style.height = deviceStyle.menuSize.h + "px";
+  }
+  if (typeof ResizeObserver === "function") {
+    let sizeT = null;
+    new ResizeObserver(() => {
+      const r = menu.getBoundingClientRect();
+      if (r.width < 100 || menu.classList.contains("hidden")) return; // ignore hidden/collapsed
+      clearTimeout(sizeT);
+      sizeT = setTimeout(() => {
+        deviceStyle.menuSize = { w: Math.round(r.width), h: Math.round(r.height) };
+        saveDeviceStyle();
+      }, 300);
+    }).observe(menu);
+  }
 
   // spacing-between-widgets slider (widgets tab)
   const gapSlider = document.getElementById("dt-widget-gap");
@@ -5806,6 +5824,24 @@ const WIDGET_NAMES = {
   spotify: "spotify embed",
   spotify2: "spotify player",
   pokepark: "pokepark",
+  pt: "pokemon & tasks",
+};
+// "pokemon & tasks" is a settings-only entry (no toggle / drag): the team bar
+// and task list are always-present structural parts of the page.
+const CUSTOM_ENTRY_IDS = ["pt"];
+// Extra per-part surface controls beyond the generic fill/text. Each surface is
+// a background color swatch + a glass checkbox, stored under widgetStyles[id].
+const WIDGET_SURFACES = {
+  habit: [
+    { label: "background box", bgKey: "boxBg", glassKey: "boxGlass" },
+    { label: "day boxes", bgKey: "dayBg", glassKey: "dayGlass" },
+    { label: "habit boxes", bgKey: "checkBg", glassKey: "checkGlass" },
+  ],
+  pt: [
+    { label: "team bar background", bgKey: "teambarBg", glassKey: "teambarGlass" },
+    { label: "task list items", bgKey: "taskitemBg", glassKey: "taskitemGlass" },
+    { label: "task bar", bgKey: "taskbarBg", glassKey: "taskbarGlass" },
+  ],
 };
 const DEFAULT_WIDGET_ORDER = { mid: ["clock", "habit"], right: ["spotify", "pokepark"] };
 
@@ -5876,6 +5912,43 @@ function applyWidgetStyles() {
     el.classList.toggle("w-text", !!s.text);
     el.classList.toggle("widget-glass", s.glass);
   }
+  applyHabitPartStyles();
+  applyPokemonTasksStyles();
+}
+
+const rootStyle = () => document.documentElement.style;
+function setRootVar(name, val) {
+  if (val) rootStyle().setProperty(name, val);
+  else rootStyle().removeProperty(name);
+}
+
+// Habit "background box / day boxes / habit boxes" overrides (per-part swatches).
+function applyHabitPartStyles() {
+  const s = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.habit) || {};
+  setRootVar("--habit-box-bg", s.boxBg);
+  setRootVar("--habit-day-bg", s.dayBg);
+  setRootVar("--habit-check-bg", s.checkBg);
+  const el = widgetEl("habit");
+  if (el) {
+    el.classList.toggle("hb-box-glass", !!s.boxGlass);
+    el.classList.toggle("hb-day-glass", !!s.dayGlass);
+    el.classList.toggle("hb-check-glass", !!s.checkGlass);
+  }
+}
+
+// "pokemon & tasks" widget: team bar bg, task list items, task bar (add input).
+function applyPokemonTasksStyles() {
+  const s = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.pt) || {};
+  setRootVar("--pt-teambar", s.teambarBg);
+  setRootVar("--pt-taskitem", s.taskitemBg);
+  setRootVar("--pt-taskbar", s.taskbarBg);
+  const team = document.querySelector(".dt-team-col");
+  if (team) team.classList.toggle("pt-teambar-glass", !!s.teambarGlass);
+  const tasks = document.querySelector(".dt-tasks");
+  if (tasks) {
+    tasks.classList.toggle("pt-taskitem-glass", !!s.taskitemGlass);
+    tasks.classList.toggle("pt-taskbar-glass", !!s.taskbarGlass);
+  }
 }
 
 // Extra vertical space added between stacked widgets, on top of each widget's
@@ -5924,19 +5997,87 @@ function renderWidgetColors() {
   }
 }
 
+// Which accordion dropdowns are open (kept across re-renders, per session).
+const widgetAccOpen = new Set();
+
+// Write one per-widget style prop, persist, and re-apply live.
+function setWidgetStyleProp(id, key, value) {
+  deviceStyle.widgetStyles = deviceStyle.widgetStyles || {};
+  const cur = deviceStyle.widgetStyles[id] || {};
+  cur[key] = value;
+  deviceStyle.widgetStyles[id] = cur;
+  saveDeviceStyle();
+  applyWidgetStyles();
+}
+
+// A background color swatch + glass checkbox (a "surface" control).
+function makeSurfaceCtrl(id, surf) {
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<span class="dt-wc-rowlabel">${surf.label}</span>` +
+    `<label class="dt-wc-swatch"><input type="color" value="${ws[surf.bgKey] || "#ffffff"}" /><span>color</span></label>` +
+    `<label class="dt-wc-glass"><input type="checkbox"${ws[surf.glassKey] ? " checked" : ""} /><span>glass</span></label>`;
+  const color = row.querySelector('input[type="color"]');
+  const glass = row.querySelector('input[type="checkbox"]');
+  color.addEventListener("input", () => setWidgetStyleProp(id, surf.bgKey, color.value));
+  glass.addEventListener("change", () => setWidgetStyleProp(id, surf.glassKey, glass.checked));
+  return row;
+}
+
+// A plain text color swatch (no glass — glass isn't meaningful for text).
+function makeTextCtrl(id) {
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<span class="dt-wc-rowlabel">text</span>` +
+    `<label class="dt-wc-swatch"><input type="color" value="${ws.text || "#ffffff"}" /><span>color</span></label>`;
+  const color = row.querySelector('input[type="color"]');
+  color.addEventListener("input", () => setWidgetStyleProp(id, "text", color.value));
+  return row;
+}
+
+// The widgets tab: each widget (+ the settings-only "pokemon & tasks" entry) is
+// a collapsible dropdown that reveals its customization controls.
 function renderWidgetList() {
   const el = document.getElementById("dt-widget-list");
   if (!el) return;
   el.innerHTML = "";
-  for (const id of WIDGET_IDS) {
-    const on = widgetPresent(id);
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "dt-widget-toggle" + (on ? " on" : "");
-    btn.innerHTML =
-      "<span>" + WIDGET_NAMES[id] + '</span><span class="wt-check">' + (on ? "✓" : "+") + "</span>";
-    btn.addEventListener("click", () => toggleWidget(id));
-    el.appendChild(btn);
+  for (const id of [...WIDGET_IDS, ...CUSTOM_ENTRY_IDS]) {
+    const isReal = !CUSTOM_ENTRY_IDS.includes(id);
+    const on = isReal ? widgetPresent(id) : true;
+    const acc = document.createElement("div");
+    acc.className = "dt-wacc" + (widgetAccOpen.has(id) ? " open" : "") + (isReal && !on ? " dt-wacc-off" : "");
+    acc.dataset.widget = id;
+
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "dt-wacc-head";
+    head.innerHTML =
+      `<span class="dt-wacc-name">${WIDGET_NAMES[id]}</span>` +
+      (isReal ? `<span class="dt-wacc-onoff${on ? " on" : ""}" title="add / remove">${on ? "✓" : "+"}</span>` : "") +
+      `<span class="dt-wacc-caret">▾</span>`;
+    head.addEventListener("click", () => {
+      acc.classList.toggle("open");
+      if (acc.classList.contains("open")) widgetAccOpen.add(id);
+      else widgetAccOpen.delete(id);
+    });
+    const onoff = head.querySelector(".dt-wacc-onoff");
+    if (onoff) onoff.addEventListener("click", (e) => { e.stopPropagation(); toggleWidget(id); });
+
+    const body = document.createElement("div");
+    body.className = "dt-wacc-body";
+    if (isReal) {
+      body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass" }));
+      body.appendChild(makeTextCtrl(id));
+    }
+    for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
+
+    acc.appendChild(head);
+    acc.appendChild(body);
+    el.appendChild(acc);
   }
 }
 
@@ -5951,7 +6092,6 @@ function toggleWidget(id) {
   saveWidgetOrder(o);
   applyWidgets();
   renderWidgetList();
-  renderWidgetColors();
 }
 
 function initWidgetDrag() {

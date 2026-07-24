@@ -1927,7 +1927,7 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1 1 auto;
   }
   .habit-day {
-    background: var(--card);
+    background: var(--habit-day-bg, var(--card)); /* habit "day boxes" swatch */
     border-radius: 16px;
     padding: 12px 4px 14px;
     display: flex;
@@ -2005,7 +2005,7 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     align-items: center;
     gap: 10px;
-    background: var(--dt-btn-primary, var(--card));
+    background: var(--habit-check-bg, var(--dt-btn-primary, var(--card))); /* habit "habit boxes" swatch */
     border: none;
     border-radius: 14px;
     padding: 12px 14px;
@@ -2046,10 +2046,16 @@ body.theme-dark .dex-cell.undiscovered img {
 
   /* ---- team column (relocated #team-grid) ---- */
   .dt-team-col {
-    background: var(--team-card);
+    background: var(--pt-teambar, var(--team-card)); /* "pokemon & tasks" widget */
     border-radius: 18px;
     padding: 12px 6px;
     align-self: stretch;
+  }
+  .dt-team-col.pt-teambar-glass {
+    background: color-mix(in srgb, var(--pt-teambar, #ffffff) 22%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
   }
   .dt-team-col .team-grid {
     display: flex;
@@ -2087,6 +2093,25 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-tasks .add-row {
     display: flex;
     gap: 10px;
+  }
+  /* "pokemon & tasks" widget: task list item + task-bar (add input) colors */
+  .dt-tasks .todo-item {
+    background: var(--pt-taskitem, var(--card));
+  }
+  .dt-tasks.pt-taskitem-glass .todo-item {
+    background: color-mix(in srgb, var(--pt-taskitem, #ffffff) 22%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+  }
+  .dt-tasks .add-row input {
+    background: var(--pt-taskbar, var(--input-bg));
+  }
+  .dt-tasks.pt-taskbar-glass .add-row input {
+    background: color-mix(in srgb, var(--pt-taskbar, #ffffff) 22%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
   }
   .dt-tasks .todo-list {
     display: flex;
@@ -3019,6 +3044,18 @@ body.theme-dark .dex-cell.undiscovered img {
     z-index: 120;
     overflow: hidden;
     user-select: none;
+    /* draggable to resize (native grip, bottom-right); the active pane scrolls */
+    resize: both;
+    min-width: 210px;
+    min-height: 190px;
+    max-width: 92vw;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .dt-edit-header,
+  .dt-edit-tabs {
+    flex: none;
   }
   .dt-edit-menu.hidden {
     display: none;
@@ -3056,6 +3093,84 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto; /* scroll the pane when the menu is resized smaller */
+  }
+  .dt-edit-body.hidden {
+    display: none;
+  }
+
+  /* ---- widgets tab: each widget is a collapsible customization dropdown ---- */
+  .dt-wacc {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .dt-wacc + .dt-wacc {
+    margin-top: 6px;
+  }
+  .dt-wacc-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    border: none;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 11px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .dt-wacc-name {
+    flex: 1;
+  }
+  .dt-wacc-onoff {
+    font-size: 12px;
+    font-weight: 800;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .dt-wacc-onoff.on {
+    background: var(--color-add);
+    color: #fff;
+    border-color: var(--color-add);
+  }
+  .dt-wacc-caret {
+    font-size: 10px;
+    color: var(--muted);
+    transition: transform 0.15s;
+  }
+  .dt-wacc.open .dt-wacc-caret {
+    transform: rotate(180deg);
+  }
+  .dt-wacc-body {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 11px;
+  }
+  .dt-wacc.open .dt-wacc-body {
+    display: flex;
+  }
+  .dt-wacc-off .dt-wacc-body {
+    opacity: 0.5;
+  }
+  .dt-wc-rowlabel {
+    flex-basis: 100%;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
   }
   /* The font picker moved into the edit menu, which clips overflow — so its
      dropdown opens in-flow (pushing content) instead of as an absolute overlay
@@ -3742,5 +3857,32 @@ body.theme-dark .dex-cell.undiscovered img {
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28) !important;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
+  }
+
+  /* ---- habit tracker per-part swatches (override primary/secondary) ----
+     The "background box" needs a late override because the box also carries the
+     generic .dt-box class that the widget "fill" tints; specific swatch wins,
+     falling back to the generic fill (--wbg), then the theme. */
+  .dt-widget[data-widget="habit"] .dt-habit-box {
+    background: var(--habit-box-bg, var(--wbg, var(--dt-btn-secondary, var(--team-card)))) !important;
+  }
+  .dt-widget[data-widget="habit"].widget-glass .dt-habit-box,
+  .dt-widget[data-widget="habit"].hb-box-glass .dt-habit-box {
+    background: color-mix(in srgb, var(--habit-box-bg, var(--wbg, #ffffff)) 22%, transparent) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  }
+  .dt-widget.hb-day-glass .habit-day {
+    background: color-mix(in srgb, var(--habit-day-bg, #ffffff) 22%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+  }
+  .dt-widget.hb-check-glass .habit-check {
+    background: color-mix(in srgb, var(--habit-check-bg, #ffffff) 22%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
   }
 }
