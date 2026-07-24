@@ -3574,6 +3574,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-splayer {
     --sp-top: #c8c9cd;
     --sp-bottom: #b5b6bb;
+    --sp-lighten: 14%; /* how much lighter the top half is than the bottom */
     border-radius: 22px;
     overflow: hidden;
     display: flex;
@@ -3915,6 +3916,20 @@ body.theme-dark .dex-cell.undiscovered img {
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28) !important;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Keep the player's top half (and the connect prompt, which shares it) a touch
+     lighter than the bottom no matter how it's colored: lighten the top over the
+     same fill the bottom uses. These override just the background from the shared
+     tint / glass rules above (later, same specificity), so the glass formatting
+     is preserved. */
+  .dt-widget.w-tint .sp-top,
+  .dt-widget.w-tint .sp-connect {
+    background: color-mix(in srgb, white var(--sp-lighten, 14%), var(--wbg)) !important;
+  }
+  .dt-widget.widget-glass .sp-top,
+  .dt-widget.widget-glass .sp-connect {
+    background: color-mix(in srgb, color-mix(in srgb, white var(--sp-lighten, 14%), var(--wbg, #ffffff)) var(--wglass-op, 22%), transparent) !important;
   }
 
   /* ---- habit tracker per-part swatches (override primary/secondary) ----
