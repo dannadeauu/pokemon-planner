@@ -3044,14 +3044,39 @@ body.theme-dark .dex-cell.undiscovered img {
     z-index: 120;
     overflow: hidden;
     user-select: none;
-    /* draggable to resize (native grip, bottom-right); the active pane scrolls */
-    resize: both;
+    /* resized via the custom .dt-edit-resize grip below (the native `resize`
+       grip is unreliable on a fixed, corner-anchored panel); the active pane
+       scrolls when the menu is shrunk */
+    resize: none;
     min-width: 210px;
     min-height: 190px;
     max-width: 92vw;
     max-height: 88vh;
     display: flex;
     flex-direction: column;
+  }
+  .dt-edit-resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: var(--color-add);
+    cursor: nwse-resize;
+    z-index: 50;
+    opacity: 0.9;
+    touch-action: none;
+  }
+  .dt-edit-resize::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid rgba(255, 255, 255, 0.85);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.85);
   }
   .dt-edit-header,
   .dt-edit-tabs {

@@ -5374,17 +5374,6 @@ function setPageEdit(on) {
   applyEditability();
   teardownPageHandles();
   if (on) {
-    // The native resize grip only works when the menu is positioned by
-    // left/top. While it's anchored by right/bottom (its default corner) the
-    // bottom-right corner is pinned, so dragging the grip does nothing. Pin it
-    // to its current left/top so the grip is free to move.
-    if (menu && !menu.style.left) {
-      const r = menu.getBoundingClientRect();
-      menu.style.left = r.left + "px";
-      menu.style.top = r.top + "px";
-      menu.style.right = "auto";
-      menu.style.bottom = "auto";
-    }
     buildDashboardHandles();
     const calRow = document.querySelector(".dt-cal-row");
     if (calRow) buildColHandles(calRow, "calCols");
@@ -5791,23 +5780,47 @@ function initEditMenu() {
   renderWidgetList();
   initWidgetDrag();
 
-  // persist the menu's resized dimensions (native `resize: both` grip)
+  // restore the menu's saved size
   if (deviceStyle.menuSize) {
     if (deviceStyle.menuSize.w) menu.style.width = deviceStyle.menuSize.w + "px";
     if (deviceStyle.menuSize.h) menu.style.height = deviceStyle.menuSize.h + "px";
   }
-  if (typeof ResizeObserver === "function") {
-    let sizeT = null;
-    new ResizeObserver(() => {
-      const r = menu.getBoundingClientRect();
-      if (r.width < 100 || menu.classList.contains("hidden")) return; // ignore hidden/collapsed
-      clearTimeout(sizeT);
-      sizeT = setTimeout(() => {
-        deviceStyle.menuSize = { w: Math.round(r.width), h: Math.round(r.height) };
-        saveDeviceStyle();
-      }, 300);
-    }).observe(menu);
+
+  // Custom corner resize grip. The native CSS `resize` grip does not respond to
+  // dragging on this fixed, corner-anchored panel, so we drive width/height
+  // ourselves via the same pointer-capturing pageDrag() used elsewhere.
+  let resizeGrip = menu.querySelector(":scope > .dt-edit-resize");
+  if (!resizeGrip) {
+    resizeGrip = document.createElement("div");
+    resizeGrip.className = "dt-edit-resize";
+    resizeGrip.title = "drag to resize";
+    menu.appendChild(resizeGrip);
   }
+  resizeGrip.addEventListener("pointerdown", (e) => {
+    e.stopPropagation();
+    const rect = menu.getBoundingClientRect();
+    const maxW = window.innerWidth * 0.92;
+    const maxH = window.innerHeight * 0.88;
+    // Anchor by left/top so the bottom-right corner tracks the cursor instead
+    // of staying pinned to the viewport's right/bottom edge.
+    menu.style.left = rect.left + "px";
+    menu.style.top = rect.top + "px";
+    menu.style.right = "auto";
+    menu.style.bottom = "auto";
+    pageDrag(
+      e,
+      (dx, dy) => {
+        menu.style.width = Math.min(maxW, Math.max(210, rect.width + dx)) + "px";
+        menu.style.height = Math.min(maxH, Math.max(190, rect.height + dy)) + "px";
+      },
+      () => {
+        const r = menu.getBoundingClientRect();
+        deviceStyle.menuSize = { w: Math.round(r.width), h: Math.round(r.height) };
+        deviceStyle.menuPos = { left: Math.round(r.left), top: Math.round(r.top) };
+        saveDeviceStyle();
+      }
+    );
+  });
 
   // spacing-between-widgets slider (widgets tab)
   const gapSlider = document.getElementById("dt-widget-gap");
