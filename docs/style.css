@@ -2353,7 +2353,10 @@ body.theme-dark .dex-cell.undiscovered img {
   /* ---- poképark box (relocated #park-mine: keep only the hopping floor) ---- */
   .dt-park-box {
     padding: 0;
-    overflow: hidden;
+    /* Let hover bubbles spill past the box when a small park can't fit them
+       above/below inside it. Actors stay clipped by .park-floor's own
+       overflow:hidden, so only the bubbles can exceed the border. */
+    overflow: visible;
     /* just a thick primary-colored outline, no fill */
     background: transparent;
     border: 3px solid var(--dt-btn-primary, var(--input-bg));
