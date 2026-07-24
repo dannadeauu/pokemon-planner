@@ -4853,6 +4853,7 @@ function applyPageLayout() {
   // All other text stays theme-colored and can be recolored via highlight+format.
   setVar("--dt-heading", colors.heading);
   setVar("--dt-task", colors.task);
+  setVar("--dt-task-done", colors.taskDone);
 
   const dash = document.querySelector(".dt-dashboard");
   // New model: independent left/right margins act as the outer column borders,
@@ -5409,7 +5410,6 @@ function syncPageEditColorInputs() {
   set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
   const textHex = toHex(cs.getPropertyValue("--text")) || "#1b1c1f";
   set("pe-heading", colors.heading || textHex);
-  set("pe-task", colors.task || textHex);
 }
 
 // Seed the banner toggle + background-image controls from saved state.
@@ -5666,7 +5666,8 @@ function initEditMenu() {
   if (!menu) return;
 
   // per-device color swatches
-  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary", "pe-heading": "heading", "pe-task": "task" };
+  // "task info" / "crossed out tasks" live in the "pokemon & tasks" dropdown now.
+  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary", "pe-heading": "heading" };
   for (const [id, key] of Object.entries(colorInputs)) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -5689,10 +5690,7 @@ function initEditMenu() {
   const textReset = document.getElementById("pe-textcolors-reset");
   if (textReset) {
     textReset.addEventListener("click", () => {
-      if (deviceStyle.colors) {
-        delete deviceStyle.colors.heading;
-        delete deviceStyle.colors.task;
-      }
+      if (deviceStyle.colors) delete deviceStyle.colors.heading;
       saveDeviceStyle();
       applyPageLayout();
       syncPageEditColorInputs();
@@ -6063,6 +6061,36 @@ function makeTextCtrl(id) {
   return row;
 }
 
+// Task-name text colors live on the dashboard (deviceStyle.colors), but their
+// controls sit in the "pokemon & tasks" dropdown. `colorKey` is "task" (the task
+// name text) or "taskDone" (done / crossed-out tasks); the swatch seeds from the
+// saved color or the current computed default.
+function makeTaskTextCtrl(label, colorKey) {
+  const colors = deviceStyle.colors || {};
+  const cs = getComputedStyle(document.documentElement);
+  const toHex = (c) => {
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
+    return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
+  };
+  const fallback =
+    colorKey === "taskDone"
+      ? toHex(cs.getPropertyValue("--muted")) || "#8a8d93"
+      : toHex(cs.getPropertyValue("--text")) || "#1b1c1f";
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<span class="dt-wc-rowlabel">${label}</span>` +
+    `<label class="dt-wc-swatch"><input type="color" value="${colors[colorKey] || fallback}" /><span>color</span></label>`;
+  const color = row.querySelector('input[type="color"]');
+  color.addEventListener("input", () => {
+    deviceStyle.colors = deviceStyle.colors || {};
+    deviceStyle.colors[colorKey] = color.value;
+    saveDeviceStyle();
+    applyPageLayout();
+  });
+  return row;
+}
+
 // The widgets tab: each widget (+ the settings-only "pokemon & tasks" entry) is
 // a collapsible dropdown that reveals its customization controls.
 function renderWidgetList() {
@@ -6098,6 +6126,10 @@ function renderWidgetList() {
       body.appendChild(makeTextCtrl(id));
     }
     for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
+    if (id === "pt") {
+      body.appendChild(makeTaskTextCtrl("task info", "task"));
+      body.appendChild(makeTaskTextCtrl("crossed out tasks", "taskDone"));
+    }
 
     acc.appendChild(head);
     acc.appendChild(body);

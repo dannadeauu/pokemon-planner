@@ -2121,13 +2121,14 @@ body.theme-dark .dex-cell.undiscovered img {
     margin: 0;
     list-style: none;
   }
-  /* "task info" swatch (page-edit text tab): colors the task-name text; done
-     tasks stay muted+struck-through regardless. */
+  /* "task info" + "crossed out tasks" swatches (in the "pokemon & tasks"
+     dropdown): task info colors the task-name text; crossed out tasks colors the
+     done (struck-through) tasks, falling back to muted. */
   .dt-tasks .todo-item .text {
     color: var(--dt-task, inherit);
   }
   .dt-tasks .todo-item.status-done .text {
-    color: var(--muted);
+    color: var(--dt-task-done, var(--muted));
   }
 
   /* ---- clock ---- */
