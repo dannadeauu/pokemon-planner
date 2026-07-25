@@ -1632,6 +1632,10 @@ body.theme-dark .dex-cell.undiscovered img {
     position: relative;
     isolation: isolate; /* own stacking context so the bg layer sits above body */
     min-height: 100vh;  /* the bg layer (inset:0) always covers at least the viewport */
+    /* clip the parallax bg layer at the dashboard's bounds: its scroll-driven
+       translateY would otherwise extend the page's scrollable area and let it
+       "keep going" past the content when "scroll with background depth" is on */
+    overflow: clip;
   }
 
   /* ---- optional page background image + end-of-scroll fill ---- */
@@ -1688,6 +1692,11 @@ body.theme-dark .dex-cell.undiscovered img {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s;
+  }
+  /* while cropping, let the dragged layer show past the dashboard bounds
+     (parallax is off during editing, so nothing extends the scroll here) */
+  .dt-root.dt-bg-editing {
+    overflow: visible;
   }
   /* while cropping, raise the whole layer above content so it can be dragged */
   .dt-root.dt-bg-editing .dt-bg-layer {
