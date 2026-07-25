@@ -6095,86 +6095,67 @@ function glassOpacityOf(ws, key) {
   return typeof v === "number" ? Math.max(0, Math.min(100, v)) : GLASS_OPACITY_DEFAULT;
 }
 
-// A labelled control group: the label acts as a heading, and its setting
-// field(s) are indented beneath it for clarity.
-function wcCtrl(label, ...fieldEls) {
-  const wrap = document.createElement("div");
-  wrap.className = "dt-wc-ctrl";
-  const head = document.createElement("div");
-  head.className = "dt-wc-head";
-  head.textContent = label;
-  const fields = document.createElement("div");
-  fields.className = "dt-wc-fields";
-  for (const f of fieldEls) if (f) fields.appendChild(f);
-  wrap.appendChild(head);
-  wrap.appendChild(fields);
-  return wrap;
-}
+const toHexColor = (c) => {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
+  return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
+};
 
-// A background color swatch + glass checkbox (a "surface" control). When glass is
-// on, a fill-opacity slider (0% colorless → 100% opaque, reflection kept) shows.
-function makeSurfaceCtrl(id, surf) {
-  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
+// One feature per line: [color swatch] [feature label]. `onInput(value)` persists.
+function makeSwatchRow(label, value, onInput) {
   const row = document.createElement("div");
   row.className = "dt-wc-row";
   row.innerHTML =
-    `<label class="dt-wc-swatch"><input type="color" value="${ws[surf.bgKey] || "#ffffff"}" /><span>color</span></label>` +
-    `<label class="dt-wc-glass"><input type="checkbox"${ws[surf.glassKey] ? " checked" : ""} /><span>glass</span></label>`;
-  const color = row.querySelector('input[type="color"]');
-  const glass = row.querySelector('input[type="checkbox"]');
+    `<label class="dt-wc-swatch"><input type="color" value="${value}" /></label>` +
+    `<span class="dt-wc-label">${label}</span>`;
+  row.querySelector("input").addEventListener("input", (e) => onInput(e.target.value));
+  return row;
+}
 
+// A "surface" control on one line, in order: color swatch, feature label, glass
+// checkbox, then (when glass is on) the fill-opacity slider.
+function makeSurfaceCtrl(id, surf) {
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
   const op = glassOpacityOf(ws, surf.opacityKey);
-  const opRow = document.createElement("label");
-  opRow.className = "dt-wc-opacity" + (ws[surf.glassKey] ? "" : " hidden");
-  opRow.innerHTML =
-    `<span>fill opacity</span>` +
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<label class="dt-wc-swatch"><input type="color" value="${ws[surf.bgKey] || "#ffffff"}" /></label>` +
+    `<span class="dt-wc-label">${surf.label}</span>` +
+    `<label class="dt-wc-glass"><input type="checkbox"${ws[surf.glassKey] ? " checked" : ""} /><span>glass</span></label>` +
+    `<span class="dt-wc-opacity${ws[surf.glassKey] ? "" : " hidden"}">` +
     `<input type="range" min="0" max="100" step="1" value="${op}" />` +
-    `<span class="dt-wc-opval">${op}%</span>`;
-  const slider = opRow.querySelector('input[type="range"]');
-  const opVal = opRow.querySelector(".dt-wc-opval");
+    `<span class="dt-wc-opval">${op}%</span>` +
+    `</span>`;
+  const color = row.querySelector(".dt-wc-swatch input");
+  const glass = row.querySelector(".dt-wc-glass input");
+  const opWrap = row.querySelector(".dt-wc-opacity");
+  const slider = opWrap.querySelector('input[type="range"]');
+  const opVal = opWrap.querySelector(".dt-wc-opval");
 
   color.addEventListener("input", () => setWidgetStyleProp(id, surf.bgKey, color.value));
   glass.addEventListener("change", () => {
     setWidgetStyleProp(id, surf.glassKey, glass.checked);
-    opRow.classList.toggle("hidden", !glass.checked);
+    opWrap.classList.toggle("hidden", !glass.checked);
   });
   slider.addEventListener("input", () => {
     opVal.textContent = slider.value + "%";
     setWidgetStyleProp(id, surf.opacityKey, parseInt(slider.value, 10));
   });
-
-  return wcCtrl(surf.label, row, opRow);
+  return row;
 }
 
 // A plain text color swatch (no glass — glass isn't meaningful for text).
 function makeTextCtrl(id) {
   const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
-  const row = document.createElement("div");
-  row.className = "dt-wc-row";
-  row.innerHTML =
-    `<label class="dt-wc-swatch"><input type="color" value="${ws.text || "#ffffff"}" /><span>color</span></label>`;
-  const color = row.querySelector('input[type="color"]');
-  color.addEventListener("input", () => setWidgetStyleProp(id, "text", color.value));
-  return wcCtrl("text", row);
+  return makeSwatchRow("text", ws.text || "#ffffff", (v) => setWidgetStyleProp(id, "text", v));
 }
 
 // A named text-color swatch stored under widgetStyles[id][key]. Seeds from the
 // saved color or a computed default CSS var (e.g. --text / --muted).
 function makeWidgetTextCtrl(id, label, key, defaultVar) {
   const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles[id]) || {};
-  const cs = getComputedStyle(document.documentElement);
-  const toHex = (c) => {
-    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
-    return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
-  };
-  const fallback = toHex(cs.getPropertyValue(defaultVar)) || "#888888";
-  const row = document.createElement("div");
-  row.className = "dt-wc-row";
-  row.innerHTML =
-    `<label class="dt-wc-swatch"><input type="color" value="${ws[key] || fallback}" /><span>color</span></label>`;
-  const color = row.querySelector('input[type="color"]');
-  color.addEventListener("input", () => setWidgetStyleProp(id, key, color.value));
-  return wcCtrl(label, row);
+  const fallback = toHexColor(getComputedStyle(document.documentElement).getPropertyValue(defaultVar)) || "#888888";
+  return makeSwatchRow(label, ws[key] || fallback, (v) => setWidgetStyleProp(id, key, v));
 }
 
 // Task-name text colors live on the dashboard (deviceStyle.colors), but their
@@ -6184,26 +6165,16 @@ function makeWidgetTextCtrl(id, label, key, defaultVar) {
 function makeTaskTextCtrl(label, colorKey) {
   const colors = deviceStyle.colors || {};
   const cs = getComputedStyle(document.documentElement);
-  const toHex = (c) => {
-    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
-    return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
-  };
   const fallback =
     colorKey === "taskDone"
-      ? toHex(cs.getPropertyValue("--muted")) || "#8a8d93"
-      : toHex(cs.getPropertyValue("--text")) || "#1b1c1f";
-  const row = document.createElement("div");
-  row.className = "dt-wc-row";
-  row.innerHTML =
-    `<label class="dt-wc-swatch"><input type="color" value="${colors[colorKey] || fallback}" /><span>color</span></label>`;
-  const color = row.querySelector('input[type="color"]');
-  color.addEventListener("input", () => {
+      ? toHexColor(cs.getPropertyValue("--muted")) || "#8a8d93"
+      : toHexColor(cs.getPropertyValue("--text")) || "#1b1c1f";
+  return makeSwatchRow(label, colors[colorKey] || fallback, (v) => {
     deviceStyle.colors = deviceStyle.colors || {};
-    deviceStyle.colors[colorKey] = color.value;
+    deviceStyle.colors[colorKey] = v;
     saveDeviceStyle();
     applyPageLayout();
   });
-  return wcCtrl(label, row);
 }
 
 // The widgets tab: each widget (+ the settings-only "pokemon & tasks" entry) is

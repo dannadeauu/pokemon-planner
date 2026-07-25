@@ -1492,11 +1492,7 @@ h1 {
 }
 
 .dex-card {
-  /* size to the pokemon grid so the card ends just below the last row (with the
-     grid's 10px bottom padding); when the grid is taller than the screen it
-     shrinks to the available space and scrolls. Same on every tab. */
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: 1;
   background: var(--team-card);
   border-radius: 24px 24px 0 0;
   overflow-y: auto;
@@ -1508,7 +1504,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 10px;
-  padding: 16px 16px 10px;
+  padding: 16px 16px 100px;
 }
 
 .dex-cell {
@@ -1631,7 +1627,8 @@ body.theme-dark .dex-cell.undiscovered img {
        through and push the dashboard — and the inset:0 bg layer — down, which
        left an unfilled strip at the very top. */
     display: flow-root;
-    padding-bottom: 64px;
+    /* end the dashboard 10px below its last content (the pokedex) — no more */
+    padding-bottom: 10px;
     position: relative;
     isolation: isolate; /* own stacking context so the bg layer sits above body */
     min-height: 100vh;  /* the bg layer (inset:0) always covers at least the viewport */
@@ -2807,7 +2804,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-dex-section .dex-grid {
     grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-    padding: 0 0 20px;
+    padding: 0;
   }
   .dt-root.special-active .dex-hint {
     display: block;
@@ -3865,19 +3862,16 @@ body.theme-dark .dex-cell.undiscovered img {
     font-size: 13px;
     font-weight: 800;
   }
+  /* one feature per line: color swatch, label, glass checkbox, then slider */
   .dt-wc-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 8px;
+    flex-wrap: nowrap;
   }
   .dt-wc-swatch {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--muted);
+    display: inline-flex;
+    flex: 0 0 auto;
     cursor: pointer;
   }
   .dt-wc-swatch input[type="color"] {
@@ -3889,15 +3883,25 @@ body.theme-dark .dex-cell.undiscovered img {
     background: none;
     cursor: pointer;
   }
+  .dt-wc-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .dt-wc-glass {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
+    flex: 0 0 auto;
     font-size: 12px;
     font-weight: 700;
     color: var(--text);
     cursor: pointer;
-    margin-left: auto;
   }
   .dt-wc-glass input {
     width: 15px;
@@ -3905,27 +3909,11 @@ body.theme-dark .dex-cell.undiscovered img {
     accent-color: var(--color-add);
     cursor: pointer;
   }
-  /* a control group: a heading label with its setting field(s) indented beneath */
-  .dt-wc-ctrl {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .dt-wc-head {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .dt-wc-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-left: 14px; /* indent settings under their heading for clarity */
-  }
   .dt-wc-opacity {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex: 0 0 auto;
     font-size: 12px;
     font-weight: 700;
     color: var(--muted);
@@ -3934,12 +3922,13 @@ body.theme-dark .dex-cell.undiscovered img {
     display: none;
   }
   .dt-wc-opacity input[type="range"] {
-    flex: 1;
+    width: 70px;
     accent-color: var(--color-add);
     cursor: pointer;
   }
   .dt-wc-opval {
-    width: 34px;
+    flex: 0 0 auto;
+    width: 30px;
     text-align: right;
     color: var(--text);
   }
