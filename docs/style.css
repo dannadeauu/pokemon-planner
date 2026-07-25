@@ -1958,7 +1958,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 50%;
     font-size: 14px;
     font-weight: 700;
-    color: var(--text);
+    color: var(--habit-daylabel-color, var(--text)); /* habit "day labels" swatch */
   }
   .habit-day.today .habit-day-label {
     background: var(--color-add);
@@ -2432,10 +2432,10 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-cal-tasks {
     min-height: 440px;
-    background: var(--cal-tasks-bg, var(--dt-btn-secondary, var(--team-card)));
+    background: var(--caltasks-box-bg, var(--dt-btn-secondary, var(--team-card)));
   }
-  .dt-cal-tasks.cal-tasks-glass {
-    background: color-mix(in srgb, var(--cal-tasks-bg, #ffffff) var(--cal-tasks-glass-op, 22%), transparent);
+  .dt-cal-tasks.caltasks-box-glass {
+    background: color-mix(in srgb, var(--caltasks-box-bg, #ffffff) var(--caltasks-box-glass-op, 22%), transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.28);
@@ -2575,17 +2575,18 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 16px 18px;
     overflow-y: auto;
   }
+  /* "calendar tasks": header labels + the "click a day…" empty message */
   .dt-cal-list-head {
     display: grid;
     grid-template-columns: 1.6fr 1fr 1fr 22px;
     gap: 8px;
     font-size: 12px;
     font-weight: 700;
-    color: var(--muted);
+    color: var(--caltasks-label-color, var(--muted));
     padding: 0 8px 8px;
   }
   .dt-cal-list-empty {
-    color: var(--muted);
+    color: var(--caltasks-label-color, var(--muted));
     font-size: 14px;
     text-align: center;
     padding: 24px 0;
@@ -2595,22 +2596,32 @@ body.theme-dark .dex-cell.undiscovered img {
     grid-template-columns: 1.6fr 1fr 1fr 22px;
     gap: 8px;
     align-items: center;
-    background: var(--card);
+    background: var(--caltasks-item-bg, var(--card));
     border-radius: 10px;
     padding: 10px 8px;
     margin-bottom: 8px;
     cursor: pointer;
     font-size: 14px;
   }
+  /* item glass rides on the persistent #dt-cal-tasks box (items are re-rendered) */
+  .dt-cal-tasks.caltasks-item-glass .dt-cal-item {
+    background: color-mix(in srgb, var(--caltasks-item-bg, #ffffff) var(--caltasks-item-glass-op, 22%), transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+  }
   .dt-cal-item.done .ci-name {
     text-decoration: line-through;
     opacity: 0.6;
+    color: var(--caltasks-done-color, inherit); /* "crossed out tasks" swatch */
   }
+  /* "task info": the assignment name + class text */
   .ci-name {
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--caltasks-info-color, inherit);
   }
   .ci-class {
     font-weight: 700;
@@ -2618,6 +2629,7 @@ body.theme-dark .dex-cell.undiscovered img {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--caltasks-info-color, inherit);
   }
   .ci-prog {
     font-size: 12px;
@@ -3960,9 +3972,12 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget.w-text .sp-title,
   .dt-widget.w-text .sp-artist,
   .dt-widget.w-text .sp-lyric,
-  .dt-widget.w-text .habit-day-label,
   .dt-widget.w-text .habit-check-label {
     color: var(--wtext) !important;
+  }
+  /* day labels follow their own swatch first, then the generic widget text */
+  .dt-widget.w-text .habit-day-label {
+    color: var(--habit-daylabel-color, var(--wtext)) !important;
   }
   .dt-widget.widget-glass .dt-clock-box,
   .dt-widget.widget-glass .dt-habit-box,

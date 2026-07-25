@@ -5865,10 +5865,11 @@ const WIDGET_NAMES = {
   pokepark: "pokepark",
   pt: "pokemon & tasks",
   cal: "calendar",
+  caltasks: "calendar tasks",
 };
-// "pokemon & tasks" / "calendar" are settings-only entries (no toggle / drag):
-// their parts are always-present structural pieces of the page.
-const CUSTOM_ENTRY_IDS = ["pt", "cal"];
+// "pokemon & tasks" / "calendar" / "calendar tasks" are settings-only entries (no
+// toggle / drag): their parts are always-present structural pieces of the page.
+const CUSTOM_ENTRY_IDS = ["pt", "cal", "caltasks"];
 // Extra per-part surface controls beyond the generic fill/text. Each surface is
 // a background color swatch + a glass checkbox, stored under widgetStyles[id].
 const WIDGET_SURFACES = {
@@ -5884,7 +5885,6 @@ const WIDGET_SURFACES = {
   ],
   cal: [
     { label: "calendar box", bgKey: "calBg", glassKey: "calGlass", opacityKey: "calGlassOpacity", opacityVar: "--cal-box-glass-op" },
-    { label: "task box", bgKey: "taskBg", glassKey: "taskGlass", opacityKey: "taskGlassOpacity", opacityVar: "--cal-tasks-glass-op" },
     { label: "day cells", bgKey: "dayBg", glassKey: "dayGlass", opacityKey: "dayGlassOpacity", opacityVar: "--cal-day-glass-op" },
   ],
 };
@@ -5962,6 +5962,7 @@ function applyWidgetStyles() {
   applyHabitPartStyles();
   applyPokemonTasksStyles();
   applyCalendarStyles();
+  applyCalTasksStyles();
 }
 
 const rootStyle = () => document.documentElement.style;
@@ -5976,6 +5977,7 @@ function applyHabitPartStyles() {
   setRootVar("--habit-box-bg", s.boxBg);
   setRootVar("--habit-day-bg", s.dayBg);
   setRootVar("--habit-check-bg", s.checkBg);
+  setRootVar("--habit-daylabel-color", s.dayLabelColor);
   rootStyle().setProperty("--habit-box-glass-op", glassOpacityOf(s, "boxGlassOpacity") + "%");
   rootStyle().setProperty("--habit-day-glass-op", glassOpacityOf(s, "dayGlassOpacity") + "%");
   rootStyle().setProperty("--habit-check-glass-op", glassOpacityOf(s, "checkGlassOpacity") + "%");
@@ -6012,21 +6014,36 @@ function applyPokemonTasksStyles() {
 function applyCalendarStyles() {
   const s = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.cal) || {};
   setRootVar("--cal-box-bg", s.calBg);
-  setRootVar("--cal-tasks-bg", s.taskBg);
   setRootVar("--cal-day-bg", s.dayBg);
   setRootVar("--cal-month-color", s.monthColor);
   setRootVar("--cal-num-color", s.numColor);
   setRootVar("--cal-dow-color", s.dowColor);
   rootStyle().setProperty("--cal-box-glass-op", glassOpacityOf(s, "calGlassOpacity") + "%");
-  rootStyle().setProperty("--cal-tasks-glass-op", glassOpacityOf(s, "taskGlassOpacity") + "%");
   rootStyle().setProperty("--cal-day-glass-op", glassOpacityOf(s, "dayGlassOpacity") + "%");
   const cal = document.getElementById("dt-calendar");
   if (cal) {
     cal.classList.toggle("cal-box-glass", !!s.calGlass);
     cal.classList.toggle("cal-day-glass", !!s.dayGlass);
   }
-  const taskBox = document.getElementById("dt-cal-tasks");
-  if (taskBox) taskBox.classList.toggle("cal-tasks-glass", !!s.taskGlass);
+}
+
+// "calendar tasks" entry: the assignment-list box + item surfaces, plus the item
+// label / task info / crossed-out text colors. Glass toggles ride on the
+// persistent #dt-cal-tasks box so rebuilt items still pick them up.
+function applyCalTasksStyles() {
+  const s = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.caltasks) || {};
+  setRootVar("--caltasks-box-bg", s.boxBg);
+  setRootVar("--caltasks-item-bg", s.itemBg);
+  setRootVar("--caltasks-label-color", s.labelColor);
+  setRootVar("--caltasks-info-color", s.infoColor);
+  setRootVar("--caltasks-done-color", s.doneColor);
+  rootStyle().setProperty("--caltasks-box-glass-op", glassOpacityOf(s, "boxGlassOpacity") + "%");
+  rootStyle().setProperty("--caltasks-item-glass-op", glassOpacityOf(s, "itemGlassOpacity") + "%");
+  const box = document.getElementById("dt-cal-tasks");
+  if (box) {
+    box.classList.toggle("caltasks-box-glass", !!s.boxGlass);
+    box.classList.toggle("caltasks-item-glass", !!s.itemGlass);
+  }
 }
 
 // Extra vertical space added between stacked widgets, on top of each widget's
@@ -6212,6 +6229,9 @@ function renderWidgetList() {
       body.appendChild(makeTextCtrl(id));
     }
     for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
+    if (id === "habit") {
+      body.appendChild(makeWidgetTextCtrl("habit", "day labels", "dayLabelColor", "--text"));
+    }
     if (id === "pt") {
       body.appendChild(makeTaskTextCtrl("task info", "task"));
       body.appendChild(makeTaskTextCtrl("crossed out tasks", "taskDone"));
@@ -6220,6 +6240,13 @@ function renderWidgetList() {
       body.appendChild(makeWidgetTextCtrl("cal", "month text", "monthColor", "--text"));
       body.appendChild(makeWidgetTextCtrl("cal", "numbers", "numColor", "--muted"));
       body.appendChild(makeWidgetTextCtrl("cal", "day labels", "dowColor", "--muted"));
+    }
+    if (id === "caltasks") {
+      body.appendChild(makeSurfaceCtrl("caltasks", { label: "background box", bgKey: "boxBg", glassKey: "boxGlass", opacityKey: "boxGlassOpacity", opacityVar: "--caltasks-box-glass-op" }));
+      body.appendChild(makeWidgetTextCtrl("caltasks", "item labels", "labelColor", "--muted"));
+      body.appendChild(makeSurfaceCtrl("caltasks", { label: "task list items", bgKey: "itemBg", glassKey: "itemGlass", opacityKey: "itemGlassOpacity", opacityVar: "--caltasks-item-glass-op" }));
+      body.appendChild(makeWidgetTextCtrl("caltasks", "task info", "infoColor", "--text"));
+      body.appendChild(makeWidgetTextCtrl("caltasks", "crossed out tasks", "doneColor", "--muted"));
     }
 
     acc.appendChild(head);
