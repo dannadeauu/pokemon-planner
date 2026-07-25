@@ -46,7 +46,10 @@
       "Bash(python3 -c \"import cv2\")",
       "Bash(python3 -m pip install --user yt-dlp imageio imageio-ffmpeg numpy)",
       "Bash(python3 -c \"import json; m=json.load\\(open\\('tools/assets_manifest.json'\\)\\); print\\('keys:', list\\(m.keys\\(\\)\\)\\); print\\('icon_dex_ids count:', len\\(m['icon_dex_ids']\\)\\); print\\('has specials:', [d for d in [480,481,482,489,490,492,494,10006,647,802] if d in m['icon_dex_ids']]\\); print\\('sample:', m['icon_dex_ids'][:12]\\)\")",
-      "Bash(python3 -c \"import PIL, certifi; print\\('PIL+certifi OK'\\)\")"
+      "Bash(python3 -c \"import PIL, certifi; print\\('PIL+certifi OK'\\)\")",
+      "Bash(awk 'NR>=1 && NR<=1962 && /@media/ {ln=NR; txt=$0} END{}' docs/style.css)",
+      "Bash(awk -F: '$1<1962')",
+      "Bash(awk -F: '$1<3979')"
     ]
   }
 }

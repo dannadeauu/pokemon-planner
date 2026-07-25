@@ -3979,6 +3979,10 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget.w-text .habit-day-label {
     color: var(--habit-daylabel-color, var(--wtext)) !important;
   }
+  /* ...but the highlighted (current) day keeps its white label */
+  .dt-widget.w-text .habit-day.today .habit-day-label {
+    color: #fff !important;
+  }
   .dt-widget.widget-glass .dt-clock-box,
   .dt-widget.widget-glass .dt-habit-box,
   .dt-widget.widget-glass .habit-week,
