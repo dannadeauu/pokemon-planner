@@ -2809,7 +2809,8 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-root.special-active .dex-hint {
     display: block;
     text-align: center;
-    margin-top: 4px;
+    /* zero the <p> default bottom margin so the page ends tight below the hint */
+    margin: 4px 0 0;
   }
 }
 
