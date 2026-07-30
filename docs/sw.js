@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, runtime-cache sprites so the app
 // works offline after first load. Bump VERSION whenever shell files change.
-const VERSION = "myteam-v107";
+const VERSION = "myteam-v108";
 
 const SHELL = [
   "./",
@@ -50,6 +50,18 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(request.url);
+
+  // Cross-origin DATA fetches (Spotify Web API, lrclib lyrics) must always hit
+  // the network live: caching them replayed stale responses — a cached "nothing
+  // playing" (204) or an old snapshot got re-served on every poll, so the player
+  // showed "play something…" / the wrong song while music was playing, and
+  // lyrics stuck to the wrong track. Only genuine static assets (hotlinked
+  // sprites, fonts) are cacheable; a fetch()'d API call has an empty
+  // `destination`, so this cleanly lets it pass straight through, uncached.
+  const CACHEABLE_CROSS = new Set(["image", "font", "style", "script"]);
+  if (url.origin !== self.location.origin && !CACHEABLE_CROSS.has(request.destination)) {
+    return; // network-only; no service-worker caching for live data
+  }
 
   // Cross-origin assets (hotlinked showdown sprites, fonts): stale-while-
   // revalidate. These come back as opaque responses whose status can't be
