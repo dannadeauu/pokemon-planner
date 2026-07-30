@@ -6014,24 +6014,47 @@ function makeEmbedEl(id) {
   return w;
 }
 // Fill an embed's frame from its saved url (or a placeholder when empty).
+function isImageUrl(u) {
+  return /\.(png|jpe?g|gif|webp|svg|bmp|avif|apng|ico)(\?.*)?(#.*)?$/i.test(u);
+}
+function isVideoUrl(u) {
+  return /\.(mp4|webm|ogg|ogv|mov|m4v)(\?.*)?(#.*)?$/i.test(u);
+}
 function renderEmbed(id) {
   const el = widgetEl(id);
   if (!el) return;
   const frame = el.querySelector(".dt-embed-frame");
   if (!frame) return;
   const src = embedFrameSrc((embedStore()[id] || {}).url);
-  if (src) {
+  if (!src) {
+    const empty = document.createElement("div");
+    empty.className = "dt-embed-empty";
+    empty.textContent = "paste a link to embed";
+    frame.replaceChildren(empty);
+  } else if (isImageUrl(src)) {
+    // direct image link: fit the picture inside the frame (no cropping)
+    const img = document.createElement("img");
+    img.className = "dt-embed-media";
+    img.src = src;
+    img.alt = "embedded image";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    frame.replaceChildren(img);
+  } else if (isVideoUrl(src)) {
+    // direct video link: fit the video inside the frame
+    const video = document.createElement("video");
+    video.className = "dt-embed-media";
+    video.src = src;
+    video.controls = true;
+    video.playsInline = true;
+    frame.replaceChildren(video);
+  } else {
     const iframe = document.createElement("iframe");
     iframe.src = src;
     iframe.loading = "lazy";
     iframe.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
     iframe.setAttribute("referrerpolicy", "no-referrer");
     frame.replaceChildren(iframe);
-  } else {
-    const empty = document.createElement("div");
-    empty.className = "dt-embed-empty";
-    empty.textContent = "paste a link to embed";
-    frame.replaceChildren(empty);
   }
 }
 // Create the DOM for embeds that don't have an element yet, and drop any whose
