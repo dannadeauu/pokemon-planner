@@ -4512,7 +4512,7 @@ const PAGE_ITEMS = [
   { id: "team", sel: ".dt-team-col" },
   { id: "clock", sel: ".dt-clock" },
   { id: "habit", sel: ".dt-habit-box" },
-  { id: "embed", sel: ".dt-embed" },
+  { id: "embed", sel: "#dt-embed" },
   { id: "park", sel: ".dt-park-box" },
   { id: "splayer", sel: ".dt-splayer" },
   { id: "calendar", sel: ".dt-calendar" },
@@ -4657,7 +4657,7 @@ function applyDashSizes(sizes) {
 // Growing the column back restores the box up to its saved width.
 function clampItemsToColumns() {
   const items = pageLayout().items || {};
-  for (const item of PAGE_ITEMS) {
+  for (const item of resizableItems()) {
     const el = document.querySelector(item.sel);
     if (!el) continue;
     const size = items[item.id];
@@ -4699,12 +4699,13 @@ function loadDeviceStyle() {
         bgImage: s.bgImage && typeof s.bgImage === "object" ? s.bgImage : null,
         menuSize: s.menuSize && typeof s.menuSize === "object" ? s.menuSize : null,
         pageRadius: typeof s.pageRadius === "number" ? s.pageRadius : null,
+        embeds: s.embeds && typeof s.embeds === "object" ? s.embeds : {},
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null, pageRadius: null };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null, pageRadius: null, embeds: {} };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -4909,7 +4910,7 @@ function applyPageLayout() {
   }
 
   const items = pl.items || {};
-  for (const item of PAGE_ITEMS) {
+  for (const item of resizableItems()) {
     const el = document.querySelector(item.sel);
     if (!el) continue;
     const size = items[item.id];
@@ -5324,7 +5325,7 @@ function buildDashboardHandles() {
 
 // Corner resize handle on each resizable box.
 function buildItemHandles() {
-  for (const item of PAGE_ITEMS) {
+  for (const item of resizableItems()) {
     const el = document.querySelector(item.sel);
     if (!el || el.querySelector(":scope > .dt-item-handle")) continue;
     el.classList.add("dt-resizable");
@@ -5909,6 +5910,35 @@ const WIDGET_SURFACES = {
 // Team + tasks are always-present draggable units; the rest toggle on/off.
 const ALWAYS_UNITS = ["team", "tasks"];
 const ALL_UNIT_IDS = [...ALWAYS_UNITS, ...WIDGET_IDS];
+
+// ---- embed-frame widgets (unlimited, user-added, per-device) ----
+// Each instance has a unique id "embed:<rand>" and a stored { url }. Its element
+// is created on demand; it drags / resizes / colors like any other widget.
+const EMBED_PREFIX = "embed:";
+function isEmbedId(id) {
+  return typeof id === "string" && id.startsWith(EMBED_PREFIX);
+}
+function embedStore() {
+  if (!deviceStyle.embeds || typeof deviceStyle.embeds !== "object") deviceStyle.embeds = {};
+  return deviceStyle.embeds;
+}
+function embedIds() {
+  return Object.keys(embedStore());
+}
+// A unit id is valid if it's a fixed unit or an existing embed instance.
+function isKnownUnit(id) {
+  return ALL_UNIT_IDS.includes(id) || (isEmbedId(id) && !!embedStore()[id]);
+}
+function unitName(id) {
+  return isEmbedId(id) ? "embed frame" : WIDGET_NAMES[id] || "widget";
+}
+// A pasted link -> a safe iframe src (only http/https; bare domains get https://).
+function embedFrameSrc(url) {
+  url = (url || "").trim();
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url && /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(url)) return "https://" + url;
+  return "";
+}
 const MAX_COLUMNS = 6;
 const DEFAULT_COLUMNS = [["team"], ["tasks"], ["clock", "habit"], ["spotify", "pokepark"]];
 
@@ -5918,7 +5948,7 @@ function widgetColumns() {
   const w = deviceStyle.widgets;
   if (w && Array.isArray(w.columns)) {
     return w.columns
-      .map((c) => (Array.isArray(c) ? c.filter((id) => ALL_UNIT_IDS.includes(id)) : []))
+      .map((c) => (Array.isArray(c) ? c.filter((id) => isKnownUnit(id)) : []))
       .filter((c) => c.length);
   }
   if (w && w.order && Array.isArray(w.order.mid) && Array.isArray(w.order.right)) {
@@ -5968,12 +5998,110 @@ function columnsFromDOM() {
     .filter((c) => c.length);
 }
 
+// Build the DOM for one embed-frame widget (grip + resizable box + edit button).
+function makeEmbedEl(id) {
+  const w = document.createElement("div");
+  w.className = "dt-widget";
+  w.dataset.widget = id;
+  w.innerHTML =
+    '<div class="dt-widget-grip" title="drag widget"></div>' +
+    '<div class="dt-embed dt-embed-generic">' +
+    '<div class="dt-embed-frame"></div>' +
+    '<div class="dt-embed-controls"><button class="dt-embed-edit" type="button">set embed link</button></div>' +
+    "</div>";
+  w.querySelector(".dt-widget-grip").addEventListener("pointerdown", (e) => startWidgetDrag(e, w));
+  w.querySelector(".dt-embed-edit").addEventListener("click", () => editEmbedLink(id));
+  return w;
+}
+// Fill an embed's frame from its saved url (or a placeholder when empty).
+function renderEmbed(id) {
+  const el = widgetEl(id);
+  if (!el) return;
+  const frame = el.querySelector(".dt-embed-frame");
+  if (!frame) return;
+  const src = embedFrameSrc((embedStore()[id] || {}).url);
+  if (src) {
+    const iframe = document.createElement("iframe");
+    iframe.src = src;
+    iframe.loading = "lazy";
+    iframe.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
+    iframe.setAttribute("referrerpolicy", "no-referrer");
+    frame.replaceChildren(iframe);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "dt-embed-empty";
+    empty.textContent = "paste a link to embed";
+    frame.replaceChildren(empty);
+  }
+}
+// Create the DOM for embeds that don't have an element yet, and drop any whose
+// instance was removed.
+function syncEmbedElements() {
+  const shed = document.getElementById("dt-widget-shed");
+  if (!shed) return;
+  const ids = new Set(embedIds());
+  document.querySelectorAll('.dt-widget[data-widget^="' + EMBED_PREFIX + '"]').forEach((el) => {
+    if (!ids.has(el.dataset.widget)) el.remove();
+  });
+  for (const id of ids) {
+    if (!widgetEl(id)) {
+      shed.appendChild(makeEmbedEl(id));
+      renderEmbed(id);
+    }
+  }
+}
+function editEmbedLink(id) {
+  const cur = (embedStore()[id] || {}).url || "";
+  const link = window.prompt("paste a link to embed (any website / video / map):", cur);
+  if (link === null) return;
+  setEmbedUrl(id, link.trim());
+}
+function setEmbedUrl(id, url) {
+  embedStore()[id] = { ...(embedStore()[id] || {}), url };
+  saveDeviceStyle();
+  renderEmbed(id);
+  renderWidgetList();
+}
+// Add a fresh embed frame to the top-left column and open its controls.
+function addEmbed() {
+  const id = EMBED_PREFIX + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  embedStore()[id] = { url: "" };
+  saveDeviceStyle();
+  let cols = widgetColumns();
+  if (!cols.length) cols = [[]];
+  cols[0] = [id, ...cols[0]];
+  saveWidgetColumns(cols);
+  widgetAccOpen.add(id);
+  applyDashboard();
+  renderWidgetList();
+}
+function removeEmbed(id) {
+  delete embedStore()[id];
+  if (deviceStyle.widgetStyles) delete deviceStyle.widgetStyles[id];
+  const cols = widgetColumns().map((c) => c.filter((x) => x !== id));
+  saveWidgetColumns(cols); // also persists the embed deletion above
+  if (pageLayout().items && pageLayout().items[id]) {
+    delete pageLayout().items[id];
+    touchUiPrefs();
+  }
+  applyDashboard();
+  renderWidgetList();
+}
+
+// Every corner-resizable box: the fixed page items plus each embed frame.
+function resizableItems() {
+  return PAGE_ITEMS.concat(
+    embedIds().map((id) => ({ id, sel: '.dt-widget[data-widget="' + id + '"] .dt-embed' }))
+  );
+}
+
 // Arrange every placed unit into its column; collapse empty columns; park
 // toggled-off / unplaced units in the hidden shed so their elements survive.
 function applyDashboard() {
   const dash = document.getElementById("dt-dashboard");
   const shed = document.getElementById("dt-widget-shed");
   if (!dash || !shed) return;
+  syncEmbedElements(); // make/remove embed-frame elements to match the store
   const cols = widgetColumns();
   const placed = new Set(cols.flat());
   // toggle-able widgets are "off" when not placed in any column
@@ -5982,7 +6110,7 @@ function applyDashboard() {
     if (el) el.classList.toggle("widget-off", !placed.has(id));
   }
   // park all units first so moving them between columns never orphans an element
-  for (const id of ALL_UNIT_IDS) {
+  for (const id of [...ALL_UNIT_IDS, ...embedIds()]) {
     const el = widgetEl(id);
     if (el) shed.appendChild(el);
   }
@@ -6021,7 +6149,7 @@ function widgetStyleOf(id) {
 }
 
 function applyWidgetStyles() {
-  for (const id of WIDGET_IDS) {
+  for (const id of [...WIDGET_IDS, ...embedIds()]) {
     const el = widgetEl(id);
     if (!el) continue;
     const s = widgetStyleOf(id);
@@ -6329,6 +6457,73 @@ function renderWidgetList() {
     acc.appendChild(body);
     el.appendChild(acc);
   }
+
+  // user-added embed frames (unlimited): each is a dropdown with a link field,
+  // fill / text colors, and a remove button
+  for (const id of embedIds()) {
+    const acc = document.createElement("div");
+    acc.className = "dt-wacc" + (widgetAccOpen.has(id) ? " open" : "");
+    acc.dataset.widget = id;
+
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "dt-wacc-head";
+    head.innerHTML =
+      `<span class="dt-wacc-name">embed frame</span>` +
+      `<span class="dt-wacc-onoff dt-wacc-remove" title="remove">✕</span>` +
+      `<span class="dt-wacc-caret">▾</span>`;
+    head.addEventListener("click", () => {
+      acc.classList.toggle("open");
+      if (acc.classList.contains("open")) widgetAccOpen.add(id);
+      else widgetAccOpen.delete(id);
+    });
+    head.querySelector(".dt-wacc-remove").addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeEmbed(id);
+    });
+
+    const body = document.createElement("div");
+    body.className = "dt-wacc-body";
+    body.appendChild(makeEmbedLinkCtrl(id));
+    body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass", opacityKey: "glassOpacity", opacityVar: "--wglass-op" }));
+    body.appendChild(makeTextCtrl(id));
+
+    acc.appendChild(head);
+    acc.appendChild(body);
+    el.appendChild(acc);
+  }
+
+  // the "+ add embed frame" button lives at the bottom of the list
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "dt-add-embed";
+  addBtn.textContent = "+ add embed frame";
+  addBtn.addEventListener("click", addEmbed);
+  el.appendChild(addBtn);
+}
+
+// A "link" text field for an embed frame; commits on change / Enter.
+function makeEmbedLinkCtrl(id) {
+  const row = document.createElement("label");
+  row.className = "dt-embed-link-row";
+  const span = document.createElement("span");
+  span.textContent = "link";
+  const input = document.createElement("input");
+  input.type = "url";
+  input.placeholder = "paste a link to embed…";
+  input.value = (embedStore()[id] || {}).url || "";
+  const commit = () => {
+    if (input.value.trim() !== ((embedStore()[id] || {}).url || "")) setEmbedUrl(id, input.value.trim());
+  };
+  input.addEventListener("change", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+    }
+  });
+  row.append(span, input);
+  return row;
 }
 
 function toggleWidget(id) {
@@ -6396,7 +6591,7 @@ function startWidgetDrag(startEvent, widget) {
   const dash = document.getElementById("dt-dashboard");
   const ghost = document.createElement("div");
   ghost.className = "dt-widget-ghost";
-  ghost.textContent = WIDGET_NAMES[widget.dataset.widget] || "widget";
+  ghost.textContent = unitName(widget.dataset.widget);
   document.body.appendChild(ghost);
   const drop = document.createElement("div");
   drop.className = "dt-widget-drop";

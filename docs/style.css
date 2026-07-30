@@ -3382,6 +3382,58 @@ body.theme-dark .dex-cell.undiscovered img {
     accent-color: var(--color-add);
     cursor: pointer;
   }
+  /* embed-frame widget: link field + add button + remove control */
+  .dt-embed-link-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .dt-embed-link-row span {
+    width: 44px;
+  }
+  .dt-embed-link-row input {
+    flex: 1;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+  }
+  .dt-wacc-remove {
+    cursor: pointer;
+  }
+  .dt-wacc-remove:hover {
+    background: #e5484d;
+    border-color: #e5484d;
+    color: #fff;
+  }
+  .dt-add-embed {
+    margin-top: 4px;
+    padding: 10px 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+  }
+  .dt-add-embed:hover {
+    border-color: var(--color-add);
+    color: var(--color-add);
+  }
+  /* while editing, don't let the embedded iframe swallow drag / resize pointers */
+  .dt-root.dt-editing .dt-embed-generic .dt-embed-frame iframe {
+    pointer-events: none;
+  }
   .dt-bgend-list {
     list-style: disc;
     padding-left: 20px;
