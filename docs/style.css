@@ -3042,6 +3042,7 @@ body.theme-dark .dex-cell.undiscovered img {
     box-sizing: border-box;
   }
   /* dashed hint around resizable items while editing */
+  .dt-root.dt-editing .dt-team-col,
   .dt-root.dt-editing .dt-clock,
   .dt-root.dt-editing .dt-habit-box,
   .dt-root.dt-editing .dt-embed,

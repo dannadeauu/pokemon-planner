@@ -4509,6 +4509,7 @@ function applyUiPrefs() {
 // is on. Mobile never sees any of this.
 // ==========================================================================
 const PAGE_ITEMS = [
+  { id: "team", sel: ".dt-team-col" },
   { id: "clock", sel: ".dt-clock" },
   { id: "habit", sel: ".dt-habit-box" },
   { id: "embed", sel: ".dt-embed" },
@@ -4520,7 +4521,7 @@ const PAGE_ITEMS = [
 // Items whose height acts as a minimum (content can grow past it) rather than a
 // hard clip — the habit box (wrapping month dots) and the spotify player (its
 // lyrics/albums have their own layout we don't want to cut off).
-const MIN_HEIGHT_ITEMS = ["habit", "splayer"];
+const MIN_HEIGHT_ITEMS = ["team", "habit", "splayer"];
 
 function pageLayout() {
   if (!uiPrefs.pageLayout || typeof uiPrefs.pageLayout !== "object") uiPrefs.pageLayout = {};
