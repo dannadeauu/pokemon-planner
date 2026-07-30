@@ -5401,6 +5401,7 @@ function setPageEdit(on) {
     // the calendar row keeps its manual column resizing
     const calRow = document.querySelector(".dt-cal-row");
     if (calRow) buildColHandles(calRow, "calCols");
+    buildColumnResizers(); // drag-to-resize dividers between dashboard columns
     buildItemHandles();
     syncPageEditColorInputs();
     syncBgImageInputs();
@@ -5926,10 +5927,30 @@ function widgetColumns() {
   }
   return DEFAULT_COLUMNS.map((c) => c.slice());
 }
-function saveWidgetColumns(cols) {
+function saveWidgetColumns(cols, flex) {
   const clean = cols.map((c) => c.slice()).filter((c) => c.length); // drop collapsed (empty) columns
-  deviceStyle.widgets = { columns: clean.length ? clean : DEFAULT_COLUMNS.map((c) => c.slice()) };
+  const columns = clean.length ? clean : DEFAULT_COLUMNS.map((c) => c.slice());
+  // keep the per-column widths only while the column count is unchanged; adding
+  // or collapsing a column resets the widths to equal.
+  let colFlex = null;
+  if (Array.isArray(flex) && flex.length === columns.length) colFlex = flex.map(Number);
+  else {
+    const prev = deviceStyle.widgets && deviceStyle.widgets.colFlex;
+    colFlex = Array.isArray(prev) && prev.length === columns.length ? prev.slice() : columns.map(() => 1);
+  }
+  deviceStyle.widgets = { columns, colFlex };
   saveDeviceStyle();
+}
+// Just the per-column widths (flex-grow weights), keeping the column contents.
+function saveColumnFlex(flex) {
+  saveWidgetColumns(widgetColumns(), flex);
+}
+// The saved flex-grow weight per rendered column, defaulting to equal widths.
+function columnFlex(n) {
+  const w = deviceStyle.widgets;
+  const f = w && Array.isArray(w.colFlex) ? w.colFlex : null;
+  if (f && f.length === n && f.every((x) => typeof x === "number" && x > 0)) return f.slice();
+  return Array(n).fill(1);
 }
 function widgetPresent(id) {
   return widgetColumns().some((col) => col.includes(id));
@@ -5968,6 +5989,7 @@ function applyDashboard() {
   }
   // rebuild the column containers (elements are moved, not recreated)
   dash.querySelectorAll(":scope > .dt-col").forEach((c) => c.remove());
+  const colEls = [];
   for (const colIds of cols) {
     const units = colIds
       .map((id) => widgetEl(id))
@@ -5977,7 +5999,12 @@ function applyDashboard() {
     colEl.className = "dt-col";
     units.forEach((el) => colEl.appendChild(el));
     dash.insertBefore(colEl, shed);
+    colEls.push(colEl);
   }
+  // apply the saved per-column widths (drag-to-resize); equal by default
+  const flex = columnFlex(colEls.length);
+  colEls.forEach((colEl, i) => (colEl.style.flex = (flex[i] || 1) + " 1 0"));
+  if (pageEditMode) buildColumnResizers(); // divider handles follow the new columns
   applyPageLayout(); // re-clamp resized items to their (possibly new) column
   applyWidgetGap();
   applyWidgetStyles();
@@ -6428,6 +6455,74 @@ function startWidgetDrag(startEvent, widget) {
       fixItemOverlaps();
     }
   );
+}
+
+// ---- drag-to-resize columns (edit mode) ----
+// A thin handle sits in each gap between adjacent columns. Dragging it shifts
+// width from one column to its neighbour while leaving every other column
+// untouched, by trading flex-grow between just those two.
+const MIN_COL_W = 120; // matches .dt-col min-width
+
+function repositionColHandles() {
+  const dash = document.getElementById("dt-dashboard");
+  if (!dash) return;
+  const cols = [...dash.querySelectorAll(":scope > .dt-col")];
+  const handles = [...dash.querySelectorAll(":scope > .dt-col-handle")];
+  const gap = parseFloat(getComputedStyle(dash).columnGap) || 0;
+  handles.forEach((h, i) => {
+    const c = cols[i];
+    if (c) h.style.left = c.offsetLeft + c.offsetWidth + gap / 2 + "px";
+    else h.remove();
+  });
+}
+
+function startColResize(startEvent, index) {
+  startEvent.preventDefault();
+  startEvent.stopPropagation();
+  const dash = document.getElementById("dt-dashboard");
+  const cols = [...dash.querySelectorAll(":scope > .dt-col")];
+  const A = cols[index];
+  const B = cols[index + 1];
+  if (!A || !B) return;
+  const wA0 = A.getBoundingClientRect().width;
+  const wB0 = B.getBoundingClientRect().width;
+  const pair = wA0 + wB0; // fixed pixel budget shared by this adjacent pair
+  const gA0 = parseFloat(getComputedStyle(A).flexGrow) || 1;
+  const gB0 = parseFloat(getComputedStyle(B).flexGrow) || 1;
+  const growSum = gA0 + gB0;
+  pageDrag(
+    startEvent,
+    (dx) => {
+      const wA = Math.max(MIN_COL_W, Math.min(pair - MIN_COL_W, wA0 + dx));
+      const gA = (wA / pair) * growSum;
+      A.style.flex = gA + " 1 0";
+      B.style.flex = growSum - gA + " 1 0";
+      repositionColHandles();
+      clampItemsToColumns(); // squeeze/grow the boxes inside as the column changes
+      alignBoxTitles();
+    },
+    () => {
+      const flex = [...dash.querySelectorAll(":scope > .dt-col")].map(
+        (c) => parseFloat(getComputedStyle(c).flexGrow) || 1
+      );
+      saveColumnFlex(flex);
+      fixItemOverlaps();
+    }
+  );
+}
+
+function buildColumnResizers() {
+  const dash = document.getElementById("dt-dashboard");
+  if (!dash) return;
+  dash.querySelectorAll(":scope > .dt-col-handle").forEach((h) => h.remove());
+  const count = dash.querySelectorAll(":scope > .dt-col").length;
+  for (let i = 0; i < count - 1; i++) {
+    const handle = document.createElement("div");
+    handle.className = "dt-col-handle";
+    handle.addEventListener("pointerdown", (e) => startColResize(e, i));
+    dash.appendChild(handle); // absolutely positioned, so it stays out of flex flow
+  }
+  repositionColHandles();
 }
 
 // Downscale a picked banner so its data URL stays small enough to sync.
@@ -7168,6 +7263,7 @@ function buildDesktop() {
   initSpotify();
   initEditMenu();
   applyDashboard(); // build columns + place / hide widget cards per saved layout
+  window.addEventListener("resize", repositionColHandles); // keep divider handles aligned
   applyPageRadius(); // page corner-rounding (style tab)
 
   // one-time migration: adopt any previously-synced page-edit colors as this
