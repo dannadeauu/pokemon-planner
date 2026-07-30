@@ -5429,7 +5429,6 @@ function syncPageEditColorInputs() {
     if (el && val) el.value = val;
   };
   set("pe-bg", colors.bg || toHex(bodyCs.backgroundColor));
-  set("pe-clock", colors.clock || "#16171a");
   set("pe-primary", colors.primary || toHex(cs.getPropertyValue("--input-bg")) || "#35363b");
   set("pe-secondary", colors.secondary || toHex(cs.getPropertyValue("--team-card")) || "#313236");
   const textHex = toHex(cs.getPropertyValue("--text")) || "#1b1c1f";
@@ -5703,7 +5702,7 @@ function initEditMenu() {
 
   // per-device color swatches
   // "task info" / "crossed out tasks" live in the "pokemon & tasks" dropdown now.
-  const colorInputs = { "pe-bg": "bg", "pe-clock": "clock", "pe-primary": "primary", "pe-secondary": "secondary", "pe-heading": "heading" };
+  const colorInputs = { "pe-bg": "bg", "pe-primary": "primary", "pe-secondary": "secondary", "pe-heading": "heading" };
   for (const [id, key] of Object.entries(colorInputs)) {
     const el = document.getElementById(id);
     if (!el) continue;

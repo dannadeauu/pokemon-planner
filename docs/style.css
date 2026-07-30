@@ -1848,6 +1848,7 @@ body.theme-dark .dex-cell.undiscovered img {
     line-height: 1.1;
     text-align: left;
     min-width: 0;
+    color: var(--dt-heading, inherit); /* "headings" swatch (page-edit text tab) */
     font-family: var(--font-heading, inherit); /* "headings font" (text tab) */
   }
   .dt-gear {
