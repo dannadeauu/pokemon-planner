@@ -1494,7 +1494,7 @@ h1 {
 .dex-card {
   flex: 1;
   background: var(--team-card);
-  border-radius: 24px 24px 0 0;
+  border-radius: calc(24px * var(--page-radius-scale, 1)) calc(24px * var(--page-radius-scale, 1)) 0 0; /* page "corner rounding" slider */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -1916,7 +1916,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-box {
     background: var(--dt-btn-secondary, var(--team-card));
     border: 1px solid var(--border);
-    border-radius: 18px;
+    border-radius: calc(18px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     min-height: 150px;
   }
 
@@ -1940,7 +1940,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .habit-day {
     background: var(--habit-day-bg, var(--card)); /* habit "day boxes" swatch */
-    border-radius: 16px;
+    border-radius: calc(16px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     padding: 12px 4px 14px;
     display: flex;
     flex-direction: column;
@@ -2165,7 +2165,7 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1;
     background: var(--dt-clock, #16171a);
     color: #fff;
-    border-radius: 16px;
+    border-radius: calc(16px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     padding: 14px 0;
     text-align: center;
     font-size: 46px;
@@ -2222,7 +2222,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 14px;
   }
   .dt-embed-frame {
-    border-radius: 14px;
+    border-radius: calc(14px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     overflow: hidden;
     background: var(--team-card);
     width: 100%;
@@ -3654,7 +3654,7 @@ body.theme-dark .dex-cell.undiscovered img {
     gap: 0px;
     /* round the outer corners on the sections themselves so the bottom stays
        rounded even when glass (backdrop-filter) defeats the parent's clip */
-    border-radius: 22px 22px 0 0;
+    border-radius: calc(22px * var(--page-radius-scale, 1)) calc(22px * var(--page-radius-scale, 1)) 0 0; /* page "corner rounding" slider */
   }
   .sp-label {
     font-size: 14px;
@@ -3772,7 +3772,7 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: flex-start;
     justify-content: space-between; /* lyrics left, covers right */
     flex-wrap: wrap;
-    border-radius: 0 0 22px 22px; /* keep the bottom corners rounded like the top */
+    border-radius: 0 0 calc(22px * var(--page-radius-scale, 1)) calc(22px * var(--page-radius-scale, 1)); /* keep the bottom corners rounded like the top; page "corner rounding" slider */
   }
   .sp-lyrics {
     flex: 1 1 150px;

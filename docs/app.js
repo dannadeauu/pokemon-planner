@@ -4695,16 +4695,27 @@ function loadDeviceStyle() {
         widgetGap: typeof s.widgetGap === "number" ? s.widgetGap : null,
         bgImage: s.bgImage && typeof s.bgImage === "object" ? s.bgImage : null,
         menuSize: s.menuSize && typeof s.menuSize === "object" ? s.menuSize : null,
+        pageRadius: typeof s.pageRadius === "number" ? s.pageRadius : null,
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null, pageRadius: null };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
   localStorage.setItem(DEVICE_STYLE_KEY, JSON.stringify(deviceStyle));
+}
+
+// Page "corner rounding" (style tab). A single multiplier that scales the base
+// corner radius of the main page surfaces (widget boxes, day pills, spotify
+// player, team card) via the --page-radius-scale CSS var. 1 = design default.
+function pageRadiusScale() {
+  return typeof deviceStyle.pageRadius === "number" ? deviceStyle.pageRadius : 1;
+}
+function applyPageRadius() {
+  document.documentElement.style.setProperty("--page-radius-scale", String(pageRadiusScale()));
 }
 function stripHtml(html) {
   const d = document.createElement("div");
@@ -5440,6 +5451,8 @@ function syncBgImageInputs() {
   if (controls) controls.classList.toggle("hidden", !hasImg);
   const remove = document.getElementById("pe-bgimg-remove");
   if (remove) remove.disabled = !hasImg;
+  const pageRadius = document.getElementById("pe-page-radius");
+  if (pageRadius) pageRadius.value = String(Math.round(pageRadiusScale() * 100));
   const zoom = document.getElementById("pe-bgimg-zoom");
   if (zoom) zoom.value = String(b.zoom || 100);
   const height = document.getElementById("pe-bgimg-height");
@@ -5521,6 +5534,16 @@ function initBannerAndBgControls() {
       saveDeviceStyle();
       applyBackgroundImage();
       syncBgImageInputs();
+    });
+  }
+
+  // --- page corner-rounding slider ---
+  const pageRadius = document.getElementById("pe-page-radius");
+  if (pageRadius) {
+    pageRadius.addEventListener("input", () => {
+      deviceStyle.pageRadius = (parseInt(pageRadius.value, 10) || 0) / 100;
+      saveDeviceStyle();
+      applyPageRadius();
     });
   }
 
@@ -7076,6 +7099,7 @@ function buildDesktop() {
   initSpotify();
   initEditMenu();
   applyWidgets(); // place / hide widget cards per this device's saved layout
+  applyPageRadius(); // page corner-rounding (style tab)
 
   // one-time migration: adopt any previously-synced page-edit colors as this
   // device's local colors (colors are per-device now, no longer synced)
