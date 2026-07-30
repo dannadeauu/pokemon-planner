@@ -54,16 +54,19 @@
       </button>
     </div>
 
-    <div class="dt-dashboard">
-      <div class="dt-team-col" id="dt-team-slot"></div>
+    <div class="dt-dashboard" id="dt-dashboard">
+      <div class="dt-widget dt-widget-team" data-widget="team">
+        <div class="dt-widget-grip" title="drag widget"></div>
+        <div class="dt-team-col" id="dt-team-slot"></div>
+      </div>
 
-      <div class="dt-tasks-col">
+      <div class="dt-widget dt-widget-tasks" data-widget="tasks">
+        <div class="dt-widget-grip" title="drag widget"></div>
         <h2 class="dt-h2">today's team</h2>
         <div class="dt-tasks" id="dt-tasks-slot"></div>
       </div>
 
-      <div class="dt-mid-col dt-widget-col" id="dt-mid-col">
-        <div class="dt-widget" data-widget="clock">
+      <div class="dt-widget" data-widget="clock">
           <div class="dt-widget-grip" title="drag widget"></div>
           <div class="dt-clock">
             <div class="dt-clock-box"><span class="dt-ampm" id="dt-clock-ampm">AM</span><span id="dt-clock-h">--</span></div>
@@ -79,9 +82,7 @@
           </div>
           <div class="habit-checks" id="habit-checks"></div>
         </div>
-      </div>
 
-      <div class="dt-right-col dt-widget-col" id="dt-right-col">
         <div class="dt-widget" data-widget="spotify">
           <div class="dt-widget-grip" title="drag widget"></div>
           <div class="dt-embed" id="dt-embed">
@@ -105,7 +106,8 @@
           <div class="dt-widget-grip" title="drag widget"></div>
           <div class="dt-splayer" id="dt-splayer"></div>
         </div>
-      </div>
+
+      <div id="dt-widget-shed" hidden></div>
     </div>
 
     <div class="dt-section">

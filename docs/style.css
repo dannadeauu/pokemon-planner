@@ -203,7 +203,7 @@ h1 {
   font-size: 16px;
   font-family: inherit;
   border: none;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
   background: var(--input-bg);
   color: var(--text);
 }
@@ -217,7 +217,7 @@ h1 {
   font-size: 16px;
   font-family: inherit;
   border: none;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
   background: var(--color-add);
   color: white;
   font-weight: 700;
@@ -241,7 +241,7 @@ h1 {
   align-items: center;
   gap: 10px;
   background: var(--card);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
@@ -1893,22 +1893,22 @@ body.theme-dark .dex-cell.undiscovered img {
     font-family: var(--font-heading, inherit); /* "headings font" (text tab) */
   }
 
-  /* ---- top dashboard grid ---- */
+  /* ---- top dashboard: a flex row of auto-sized columns ----
+     Columns share the width evenly and reflow as units / columns are added or
+     removed. Team, tasks and every widget are interchangeable draggable units
+     that can live in any column; an empty column collapses (isn't rendered). */
   .dt-dashboard {
-    display: grid;
-    grid-template-columns: 88px minmax(230px, 1.1fr) 1fr 1.25fr;
+    display: flex;
     gap: 22px;
-    align-items: start;
+    align-items: flex-start;
   }
-  .dt-mid-col,
-  .dt-right-col,
-  .dt-tasks-col {
+  .dt-col {
+    flex: 1 1 0;
+    min-width: 120px; /* keeps columns usable; the drag caps new columns at 6 */
     display: flex;
     flex-direction: column;
-    min-width: 0;
-  }
-  /* adjustable extra vertical space between stacked widgets (edit menu) */
-  .dt-widget-col {
+    min-height: 0;
+    /* adjustable extra vertical space between stacked widgets (edit menu) */
     row-gap: var(--dt-widget-gap, 0px);
   }
 
@@ -2019,7 +2019,7 @@ body.theme-dark .dex-cell.undiscovered img {
     gap: 10px;
     background: var(--habit-check-bg, var(--dt-btn-primary, var(--card))); /* habit "habit boxes" swatch */
     border: none;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     padding: 12px 14px;
   }
   .habit-check.checked {
@@ -2059,7 +2059,7 @@ body.theme-dark .dex-cell.undiscovered img {
   /* ---- team column (relocated #team-grid) ---- */
   .dt-team-col {
     background: var(--pt-teambar, var(--team-card)); /* "pokemon & tasks" widget */
-    border-radius: 18px;
+    border-radius: calc(18px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     padding: 12px 6px;
     align-self: stretch;
   }
@@ -3630,6 +3630,16 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--color-add);
     margin: 6px 0;
     box-shadow: 0 0 0 1px var(--color-add);
+  }
+  /* full-height highlight shown at the page edge: drop here to make a new column */
+  .dt-col-new-indicator {
+    position: absolute;
+    width: 6px;
+    border-radius: 3px;
+    background: var(--color-add);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-add) 30%, transparent);
+    z-index: 200;
+    pointer-events: none;
   }
 
   /* ---- custom spotify player widget ----
