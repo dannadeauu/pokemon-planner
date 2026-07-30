@@ -2242,6 +2242,11 @@ body.theme-dark .dex-cell.undiscovered img {
     height: 100%;
     object-fit: contain;
   }
+  /* the letterbox area a fitted image / video doesn't cover stays transparent
+     (unless the user set an explicit fill, which keeps its higher specificity) */
+  .dt-embed-frame.dt-embed-transparent {
+    background: transparent;
+  }
   .dt-embed-empty {
     display: flex;
     align-items: center;

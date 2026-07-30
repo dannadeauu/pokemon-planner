@@ -6026,6 +6026,9 @@ function renderEmbed(id) {
   const frame = el.querySelector(".dt-embed-frame");
   if (!frame) return;
   const src = embedFrameSrc((embedStore()[id] || {}).url);
+  // media (image / video) is letterboxed to fit; make that excess transparent
+  // so the page shows through instead of the frame's fill color
+  frame.classList.toggle("dt-embed-transparent", !!src && (isImageUrl(src) || isVideoUrl(src)));
   if (!src) {
     const empty = document.createElement("div");
     empty.className = "dt-embed-empty";
