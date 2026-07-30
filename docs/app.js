@@ -4299,8 +4299,13 @@ function renderSpotifyPlayerBody() {
   }
   const t = splayer.track;
   if (!t) {
+    // keep a filled box behind the idle text so the white type stays legible
+    // against the page / column background (same fill as the connect prompt)
     el.innerHTML =
-      '<div class="sp-label">now playing:</div><div class="sp-lyrics-none">play something on spotify to see it here</div>';
+      '<div class="sp-idle">' +
+      '<div class="sp-label">now playing:</div>' +
+      '<div class="sp-lyrics-none">play something on spotify to see it here</div>' +
+      "</div>";
     return;
   }
   const art = t.album && t.album.images && t.album.images[0] ? t.album.images[0].url : "";

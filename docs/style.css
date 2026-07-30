@@ -3927,6 +3927,15 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 26px 0;
     border-radius: 22px; /* standalone prompt: round all corners */
   }
+  /* "nothing playing" state: a filled box so the white idle text stays legible */
+  .sp-idle {
+    background: var(--sp-top);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-radius: calc(22px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
+  }
   .sp-connect .sp-label {
     margin-bottom: 10px;
   }
@@ -4038,7 +4047,8 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget.w-tint .dt-embed-frame,
   .dt-widget.w-tint .sp-top,
   .dt-widget.w-tint .sp-bottom,
-  .dt-widget.w-tint .sp-connect {
+  .dt-widget.w-tint .sp-connect,
+  .dt-widget.w-tint .sp-idle {
     background: var(--wbg) !important;
   }
   .dt-widget.w-text,
@@ -4066,7 +4076,8 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget.widget-glass .dt-embed-frame,
   .dt-widget.widget-glass .sp-top,
   .dt-widget.widget-glass .sp-bottom,
-  .dt-widget.widget-glass .sp-connect {
+  .dt-widget.widget-glass .sp-connect,
+  .dt-widget.widget-glass .sp-idle {
     background: color-mix(in srgb, var(--wbg, #ffffff) var(--wglass-op, 22%), transparent) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
