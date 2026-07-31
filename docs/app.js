@@ -4827,6 +4827,8 @@ function applyBackgroundImage() {
     root.classList.remove("has-bg-image");
     layer.style.transform = ""; // drop any parallax offset from a prior image
     layer.style.willChange = "";
+    bgImgNatural = null;
+    applyClockBlend(); // fall back to blending against the solid page color
     return;
   }
   root.classList.add("has-bg-image");
@@ -4844,12 +4846,14 @@ function applyBackgroundImage() {
     const endColor = b.endColor || (deviceStyle.colors && deviceStyle.colors.bg) || getComputedStyle(document.body).backgroundColor;
     layer.style.background = endColor;
   }
-  // Compositing (will-change) is managed dynamically, not here: the layer is
-  // promoted only while the user is actively scrolling (so the parallax transform
-  // is GPU-driven and never lags behind the scroll) and demoted at rest, which
-  // lets mix-blend-mode widgets (the clock "blend") blend against the background.
-  // See onBgParallaxScroll / promoteBgLayer.
+  // The clock "blend" no longer uses mix-blend-mode against this layer (it paints
+  // its own aligned copy of the background via background-blend-mode — see
+  // applyClockBlend), so the layer can stay GPU-composited for smooth, lag-free
+  // parallax with no tradeoff.
+  layer.style.willChange = b.parallax ? "transform" : "";
   updateBgParallax();
+  loadBgImgNatural(); // for the clock "blend" alignment math
+  applyClockBlend();
 }
 
 // Offset the background layer for the "scroll with background depth" parallax:
@@ -4864,38 +4868,19 @@ function updateBgParallax() {
   const editing = root.classList.contains("dt-bg-editing");
   if (!b.src || !b.parallax || editing) {
     layer.style.transform = "";
-    promoteBgLayer(false);
     return;
   }
   const sy = (document.scrollingElement || document.documentElement).scrollTop || 0;
   const off = (1 - BG_PARALLAX_FACTOR) * sy;
-  // Clear the transform entirely at the top (transform:none) so the layer stays
-  // un-composited and widgets can blend against it; only offset once scrolled.
-  layer.style.transform = off > 0.5 ? `translateY(${off.toFixed(1)}px)` : "";
+  layer.style.transform = `translateY(${off.toFixed(1)}px)`;
 }
 let bgParallaxRaf = 0;
-let bgParallaxIdle = 0;
-// Promote/demote the bg layer's own compositor layer. Promoted (will-change) the
-// parallax transform is GPU-driven and lag-free; demoted, mix-blend-mode widgets
-// (the clock "blend") can blend against the background. Guarded so repeated
-// scroll events don't thrash the style.
-function promoteBgLayer(on) {
-  const layer = document.getElementById("dt-bg-layer");
-  if (!layer) return;
-  const val = on ? "transform" : "";
-  if (layer.style.willChange !== val) layer.style.willChange = val;
-}
 function onBgParallaxScroll() {
-  const b = bgImageCfg();
-  if (b.src && b.parallax) {
-    promoteBgLayer(true); // composite for the duration of this scroll gesture
-    clearTimeout(bgParallaxIdle);
-    bgParallaxIdle = setTimeout(() => promoteBgLayer(false), 180); // demote at rest
-  }
   if (bgParallaxRaf) return;
   bgParallaxRaf = requestAnimationFrame(() => {
     bgParallaxRaf = 0;
     updateBgParallax();
+    syncClockBlendBg(); // keep the clock's blended-bg copy aligned as it scrolls
   });
 }
 
@@ -6228,15 +6213,13 @@ function applyWidgetStyles() {
     if (id === "clock") {
       el.style.setProperty("--wclock-plainop", clockTextGlassOpacity(ws) + "%");
       el.classList.toggle("w-clock-glass", !!ws.textGlass);
-      // blend modes: the fill (boxes) and the number text (plain) each get theirs
-      el.style.setProperty("--wclock-box-blend", ws.boxBlend || "normal");
-      el.style.setProperty("--wclock-plain-blend", ws.plainBlend || "normal");
     }
   }
   applyHabitPartStyles();
   applyPokemonTasksStyles();
   applyCalendarStyles();
   applyCalTasksStyles();
+  applyClockBlend(); // the clock "blend" reads widgetStyles.clock (fill/text/mode)
 }
 
 const rootStyle = () => document.documentElement.style;
@@ -7040,6 +7023,7 @@ function fitClockPlain() {
   const resizedH = clock.style.height && clock.style.height !== "auto" && clock.style.height !== "";
   if (resizedH && availH > 0) size = Math.min(size, (availH / h) * REF);
   numEl.style.fontSize = Math.max(12, Math.floor(size * 0.92)) + "px";
+  syncClockBlendBg(); // the digits' box moved/resized -> realign the blended bg
 }
 
 // Toggle the clock between the "boxes" and "plain numbers" layouts and refresh
@@ -7048,6 +7032,116 @@ function applyClockFormat() {
   const clock = document.querySelector(".dt-clock");
   if (clock) clock.classList.toggle("dt-clock-plain-mode", settings.clockFormat === "plain");
   renderDesktopClock();
+  applyClockBlend();
+}
+
+// ---- clock "blend" via background-blend-mode -----------------------------
+// Instead of mix-blend-mode (which blends against the backdrop and breaks over a
+// GPU-composited / parallaxing background), the clock paints its OWN aligned copy
+// of the page background and blends it with the clock's color using
+// background-blend-mode — a self-contained, paint-time blend (like glass) that
+// keeps working during scroll with no lag. applyClockBlend sets up the layers;
+// syncClockBlendBg keeps that copy lined up with the real background.
+let bgImgNatural = null; // { w, h } natural size of the current bg image
+function loadBgImgNatural() {
+  const b = bgImageCfg();
+  bgImgNatural = null;
+  if (!b.src) return;
+  const im = new Image();
+  im.onload = () => {
+    if (im.naturalWidth && im.naturalHeight) bgImgNatural = { w: im.naturalWidth, h: im.naturalHeight };
+    syncClockBlendBg();
+  };
+  im.src = b.src;
+}
+
+function applyClockBlend() {
+  const root = document.getElementById("dt-root");
+  if (!root) return;
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.clock) || {};
+  const plain = settings.clockFormat === "plain";
+  const mode = (plain ? ws.plainBlend : ws.boxBlend) || "normal";
+  const active = mode !== "normal";
+  const hasImg = root.classList.contains("has-bg-image");
+  const cs = getComputedStyle(document.documentElement);
+  const pageColor =
+    (cs.getPropertyValue("--dt-bg") || "").trim() ||
+    (cs.getPropertyValue("--bg") || "").trim() ||
+    "#eceef2";
+  // the base layer the clock color blends against: the real image, or (no image)
+  // a solid swatch of the page color so the effect still does something
+  const imgLayer = hasImg ? "var(--dt-bg-image)" : `linear-gradient(${pageColor}, ${pageColor})`;
+
+  const setup = (el, on, color) => {
+    if (!el) return;
+    if (on) {
+      el.style.setProperty("--clock-blend-color", color);
+      el.style.setProperty("--clock-blend-img", imgLayer);
+      el.style.setProperty("--clock-blend-mode", mode);
+      el.classList.add("clock-blend-on");
+    } else {
+      el.classList.remove("clock-blend-on");
+      el.style.removeProperty("--clock-blend-color");
+      el.style.removeProperty("--clock-blend-img");
+      el.style.removeProperty("--clock-blend-mode");
+      el.style.removeProperty("--clock-blend-size");
+      el.style.removeProperty("--clock-blend-pos");
+    }
+  };
+
+  // plain numbers blend on the digits (background-clip: text); boxes blend on the
+  // fill. Only the active format's target is turned on.
+  const numColor = ws.text || toHexColor(cs.getPropertyValue("--text")) || "#ffffff";
+  const boxColor = ws.bg || toHexColor(cs.getPropertyValue("--dt-clock")) || "#16171a";
+  setup(document.getElementById("dt-clock-plain-num"), active && plain, numColor);
+  document.querySelectorAll(".dt-clock-box").forEach((b) => setup(b, active && !plain, boxColor));
+
+  syncClockBlendBg();
+}
+
+// Line up each blended clock element's background-image copy with the real page
+// background behind it (in viewport space), so the blend reads as the actual
+// background. Cheap: a couple of getBoundingClientRects + a style write.
+function syncClockBlendBg() {
+  const targets = [...document.querySelectorAll(".clock-blend-on")];
+  if (!targets.length) return;
+  const root = document.getElementById("dt-root");
+  const imgEl = document.getElementById("dt-bg-img");
+  const hasImg = root && root.classList.contains("has-bg-image");
+  if (!hasImg || !imgEl) {
+    // solid page-color fallback: no alignment needed
+    targets.forEach((t) => {
+      t.style.setProperty("--clock-blend-size", "100% 100%");
+      t.style.setProperty("--clock-blend-pos", "0 0");
+    });
+    return;
+  }
+  const bgRect = imgEl.getBoundingClientRect();
+  const b = bgImageCfg();
+  const nat = bgImgNatural;
+  let rw, rh;
+  if (nat && nat.w && nat.h) {
+    if (b.zoom && b.zoom > 100) {
+      rw = (bgRect.width * b.zoom) / 100;
+      rh = (rw * nat.h) / nat.w;
+    } else {
+      const scale = Math.max(bgRect.width / nat.w, bgRect.height / nat.h); // cover
+      rw = nat.w * scale;
+      rh = nat.h * scale;
+    }
+  } else {
+    rw = bgRect.width; // gradient / unknown natural size: fills the box
+    rh = bgRect.height;
+  }
+  const px = (typeof b.posX === "number" ? b.posX : 50) / 100;
+  const py = (typeof b.posY === "number" ? b.posY : 50) / 100;
+  const imgLeft = bgRect.left + (bgRect.width - rw) * px;
+  const imgTop = bgRect.top + (bgRect.height - rh) * py;
+  targets.forEach((t) => {
+    const r = t.getBoundingClientRect();
+    t.style.setProperty("--clock-blend-size", `${rw.toFixed(1)}px ${rh.toFixed(1)}px`);
+    t.style.setProperty("--clock-blend-pos", `${(imgLeft - r.left).toFixed(1)}px ${(imgTop - r.top).toFixed(1)}px`);
+  });
 }
 
 let clockPlainRO = null;
@@ -7058,9 +7152,10 @@ function startDesktopClock() {
   setInterval(renderDesktopClock, 15000);
   // refit whenever the frame changes size (resize drag, column reflow, …)
   if (window.ResizeObserver && !clockPlainRO) {
-    clockPlainRO = new ResizeObserver(() => fitClockPlain());
+    clockPlainRO = new ResizeObserver(() => { fitClockPlain(); syncClockBlendBg(); });
     clockPlainRO.observe(clock);
   }
+  window.addEventListener("resize", syncClockBlendBg);
 }
 
 // ==========================================================================
