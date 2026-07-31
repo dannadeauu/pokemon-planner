@@ -4906,6 +4906,13 @@ function applyPageLayout() {
   setVar("--dt-task", colors.task);
   setVar("--dt-task-done", colors.taskDone);
 
+  // page margins (edit mode, drag handles): applied globally to the page content.
+  // Side margins inset the title/sections and the dashboard's EDGE columns only —
+  // the inner columns keep their width (see CSS: .dt-col-first / .dt-col-last).
+  setVar("--dt-page-mt", pl.pageMarginTop ? pl.pageMarginTop + "px" : "");
+  setVar("--dt-page-ml", pl.pageMarginLeft ? pl.pageMarginLeft + "px" : "");
+  setVar("--dt-page-mr", pl.pageMarginRight ? pl.pageMarginRight + "px" : "");
+
   const dash = document.querySelector(".dt-dashboard");
   // Columns auto-size (flex) and reflow now, so the dashboard keeps its default
   // centered max-width — no saved per-column widths / margins to apply.
@@ -5392,6 +5399,7 @@ function teardownPageHandles() {
   document.querySelectorAll(".dt-col-handle, .dt-item-handle").forEach((h) => h.remove());
   marginHandles.forEach((h) => h.remove());
   marginHandles = [];
+  removeMarginHandles();
   document.querySelectorAll(".dt-resizable").forEach((el) => el.classList.remove("dt-resizable"));
 }
 
@@ -5422,6 +5430,7 @@ function setPageEdit(on) {
     const calRow = document.querySelector(".dt-cal-row");
     if (calRow) buildColHandles(calRow, "calCols");
     buildColumnResizers(); // drag-to-resize dividers between dashboard columns
+    buildMarginHandles(); // drag the page's top / left / right margins
     buildItemHandles();
     syncPageEditColorInputs();
     syncBgImageInputs();
@@ -6177,8 +6186,16 @@ function applyDashboard() {
   }
   // apply the saved per-column widths (drag-to-resize); equal by default
   const flex = columnFlex(colEls.length);
-  colEls.forEach((colEl, i) => (colEl.style.flex = (flex[i] || 1) + " 1 0"));
-  if (pageEditMode) buildColumnResizers(); // divider handles follow the new columns
+  colEls.forEach((colEl, i) => {
+    colEl.style.flex = (flex[i] || 1) + " 1 0";
+    // tag the edge columns so page side-margins inset only them (CSS)
+    colEl.classList.toggle("dt-col-first", i === 0);
+    colEl.classList.toggle("dt-col-last", i === colEls.length - 1);
+  });
+  if (pageEditMode) {
+    buildColumnResizers(); // divider handles follow the new columns
+    repositionMarginHandles(); // margin handles track the new dashboard geometry
+  }
   applyPageLayout(); // re-clamp resized items to their (possibly new) column
   applyWidgetGap();
   applyWidgetStyles();
@@ -6951,6 +6968,92 @@ function buildColumnResizers() {
     dash.appendChild(handle); // absolutely positioned, so it stays out of flex flow
   }
   repositionColHandles();
+}
+
+// ---- page margins (edit mode): drag the top / left / right of the page content.
+// Side margins are applied globally (title, sections + the dashboard's edge
+// columns), resizing only the edge columns so inner columns keep their width.
+const PAGE_PAD = 28; // the base content side padding (matches the CSS)
+let pageMarginHandles = [];
+function removeMarginHandles() {
+  pageMarginHandles.forEach((h) => h.remove());
+  pageMarginHandles = [];
+}
+function buildMarginHandles() {
+  removeMarginHandles();
+  const mk = (cls, dir) => {
+    const h = document.createElement("div");
+    h.className = "dt-margin-handle" + (cls ? " " + cls : "");
+    h.title = "drag to adjust the page margin";
+    h.addEventListener("pointerdown", (e) => startMarginDrag(e, dir));
+    document.body.appendChild(h);
+    pageMarginHandles.push(h);
+  };
+  mk("dt-margin-left", "left");
+  mk("dt-margin-right", "right");
+  mk("dt-margin-top", "top");
+  repositionMarginHandles();
+}
+function repositionMarginHandles() {
+  if (!pageMarginHandles.length) return;
+  const dash = document.querySelector(".dt-dashboard");
+  const title = document.querySelector(".dt-title-row");
+  const ref = dash || title;
+  if (!ref) return;
+  const r = ref.getBoundingClientRect();
+  const pl = pageLayout();
+  const ml = pl.pageMarginLeft || 0;
+  const mr = pl.pageMarginRight || 0;
+  const [lh, rh, th] = pageMarginHandles;
+  const top = title ? title.getBoundingClientRect().top : r.top;
+  const height = Math.max(60, Math.min(520, r.bottom - top));
+  if (lh) {
+    lh.style.left = r.left + PAGE_PAD + ml - 8 + "px";
+    lh.style.top = top + "px";
+    lh.style.height = height + "px";
+  }
+  if (rh) {
+    rh.style.left = r.right - PAGE_PAD - mr - 8 + "px";
+    rh.style.top = top + "px";
+    rh.style.height = height + "px";
+  }
+  if (th) {
+    const tr = title ? title.getBoundingClientRect() : r;
+    th.style.top = tr.top - 8 + "px";
+    th.style.left = tr.left + PAGE_PAD + "px";
+    th.style.width = Math.max(60, tr.width - PAGE_PAD * 2) + "px";
+  }
+}
+function startMarginDrag(startEvent, dir) {
+  startEvent.preventDefault();
+  startEvent.stopPropagation();
+  const pl = pageLayout();
+  const start = {
+    ml: pl.pageMarginLeft || 0,
+    mr: pl.pageMarginRight || 0,
+    mt: pl.pageMarginTop || 0,
+  };
+  // cap side margins so the edge column keeps a usable content width
+  const dash = document.querySelector(".dt-dashboard");
+  const cols = dash ? [...dash.querySelectorAll(":scope > .dt-col")] : [];
+  const outerW = (col) => (col ? col.getBoundingClientRect().width : 400);
+  const maxL = Math.max(0, outerW(cols[0]) - 60);
+  const maxR = Math.max(0, outerW(cols[cols.length - 1]) - 60);
+  pageDrag(
+    startEvent,
+    (dx, dy) => {
+      if (dir === "left") pl.pageMarginLeft = Math.round(Math.max(0, Math.min(maxL, start.ml + dx)));
+      else if (dir === "right") pl.pageMarginRight = Math.round(Math.max(0, Math.min(maxR, start.mr - dx)));
+      else pl.pageMarginTop = Math.round(Math.max(0, Math.min(400, start.mt + dy)));
+      applyPageLayout();
+      repositionMarginHandles();
+      repositionColHandles();
+    },
+    () => {
+      fixItemOverlaps();
+      touchUiPrefs();
+    }
+  );
 }
 
 // Downscale a picked banner so its data URL stays small enough to sync.
@@ -7855,6 +7958,9 @@ function buildDesktop() {
   initEditMenu();
   applyDashboard(); // build columns + place / hide widget cards per saved layout
   window.addEventListener("resize", repositionColHandles); // keep divider handles aligned
+  // keep the page-margin handles pinned to the content as it resizes / scrolls
+  window.addEventListener("resize", repositionMarginHandles);
+  window.addEventListener("scroll", () => { if (pageEditMode) repositionMarginHandles(); }, { passive: true });
   applyPageRadius(); // page corner-rounding (style tab)
 
   // one-time migration: adopt any previously-synced page-edit colors as this
