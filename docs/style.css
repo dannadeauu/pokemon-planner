@@ -1637,6 +1637,20 @@ body.theme-dark .dex-cell.undiscovered img {
        "keep going" past the content when "scroll with background depth" is on */
     overflow: clip;
   }
+  /* A page-colored backdrop INSIDE the isolated .dt-root group. Because the root
+     is `isolation: isolate`, descendants' mix-blend-mode (e.g. the clock "blend"
+     dropdown) can only blend against content painted inside the group — the
+     root's own background sits behind the group and is unreachable. This layer
+     sits at the very back (below the bg image at z-index -1) so the clock always
+     has something to blend with, whether or not a background image is set. */
+  .dt-root::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background: var(--dt-bg, var(--bg));
+    pointer-events: none;
+  }
 
   /* ---- optional page background image + end-of-scroll fill ---- */
   .dt-bg-layer {
