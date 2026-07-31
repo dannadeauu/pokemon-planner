@@ -2162,23 +2162,29 @@ body.theme-dark .dex-cell.undiscovered img {
     margin-bottom: 18px;
     container-type: inline-size;
   }
-  /* "plain numbers" format: hide the boxes, show one resizable line of digits */
+  /* "plain numbers" format: hide the boxes, show one line of digits that a
+     ResizeObserver (fitClockPlain) grows to fill the frame as it's stretched */
   .dt-clock-plain {
     display: none;
     flex: 1;
-    text-align: center;
-    font-size: 26cqi; /* scales with the widget width */
-    font-weight: 800;
-    letter-spacing: 1px;
-    line-height: 1.1;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
     color: var(--text);
     font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
+  }
+  .dt-clock-plain-num {
+    white-space: nowrap;
+    font-size: 48px; /* seed; fitClockPlain overrides to fill the frame */
+    font-weight: 800;
+    letter-spacing: 1px;
   }
   .dt-clock.dt-clock-plain-mode .dt-clock-box {
     display: none;
   }
   .dt-clock.dt-clock-plain-mode .dt-clock-plain {
-    display: block;
+    display: flex;
   }
   .dt-clock-box {
     position: relative;
@@ -4092,6 +4098,12 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-widget.w-text .sp-lyric,
   .dt-widget.w-text .habit-check-label {
     color: var(--wtext) !important;
+  }
+  /* clock "plain numbers" glass: the number color goes translucent (frosted).
+     Placed after the .w-text rule so it wins at equal specificity; falls back to
+     the theme text color when no explicit number color was picked. */
+  .dt-widget.w-clock-glass .dt-clock-plain {
+    color: color-mix(in srgb, var(--wtext, var(--text)) var(--wclock-plainop, 50%), transparent) !important;
   }
   /* day labels follow their own swatch first, then the generic widget text */
   .dt-widget.w-text .habit-day-label {

@@ -6197,6 +6197,11 @@ function applyWidgetStyles() {
     el.classList.toggle("w-tint", !!s.bg && !s.glass);
     el.classList.toggle("w-text", !!s.text);
     el.classList.toggle("widget-glass", s.glass);
+    // clock "plain numbers" glass: translucent number color
+    if (id === "clock") {
+      el.style.setProperty("--wclock-plainop", clockTextGlassOpacity(ws) + "%");
+      el.classList.toggle("w-clock-glass", !!ws.textGlass);
+    }
   }
   applyHabitPartStyles();
   applyPokemonTasksStyles();
@@ -6351,6 +6356,14 @@ function glassOpacityOf(ws, key) {
   return typeof v === "number" ? Math.max(0, Math.min(100, v)) : GLASS_OPACITY_DEFAULT;
 }
 
+// Clock plain-number glass opacity: higher default than a fill, since translucent
+// text needs more presence than a translucent panel to stay readable.
+const CLOCK_TEXT_GLASS_DEFAULT = 50;
+function clockTextGlassOpacity(ws) {
+  const v = ws && ws.textGlassOpacity;
+  return typeof v === "number" ? Math.max(0, Math.min(100, v)) : CLOCK_TEXT_GLASS_DEFAULT;
+}
+
 const toHexColor = (c) => {
   const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c);
   return m ? "#" + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("") : null;
@@ -6430,7 +6443,43 @@ function makeClockFormatCtrl() {
     settings.clockFormat = sel.value;
     saveSettings(settings);
     applyClockFormat();
+    renderWidgetList(); // swap the fill swatch <-> glass text swatch
     touchPrefs();
+  });
+  return row;
+}
+
+// The clock's "text" control in plain mode: colors the numbers, plus a glass
+// checkbox (+ opacity) that makes them translucent/frosted. Mirrors the surface
+// control's layout but drives the number color instead of a box fill.
+function makeClockTextCtrl() {
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.clock) || {};
+  const on = !!ws.textGlass;
+  const op = clockTextGlassOpacity(ws);
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<label class="dt-wc-swatch"><input type="color" value="${ws.text || "#ffffff"}" /></label>` +
+    `<span class="dt-wc-label">text</span>` +
+    `<label class="dt-wc-glass"><input type="checkbox"${on ? " checked" : ""} /><span>glass</span></label>` +
+    `<span class="dt-wc-opacity${on ? "" : " hidden"}">` +
+    `<input type="range" min="0" max="100" step="1" value="${op}" />` +
+    `<span class="dt-wc-opval">${op}%</span>` +
+    `</span>`;
+  const color = row.querySelector(".dt-wc-swatch input");
+  const glass = row.querySelector(".dt-wc-glass input");
+  const opWrap = row.querySelector(".dt-wc-opacity");
+  const slider = opWrap.querySelector('input[type="range"]');
+  const opVal = opWrap.querySelector(".dt-wc-opval");
+
+  color.addEventListener("input", () => setWidgetStyleProp("clock", "text", color.value));
+  glass.addEventListener("change", () => {
+    setWidgetStyleProp("clock", "textGlass", glass.checked);
+    opWrap.classList.toggle("hidden", !glass.checked);
+  });
+  slider.addEventListener("input", () => {
+    opVal.textContent = slider.value + "%";
+    setWidgetStyleProp("clock", "textGlassOpacity", parseInt(slider.value, 10));
   });
   return row;
 }
@@ -6501,8 +6550,14 @@ function renderWidgetList() {
     const body = document.createElement("div");
     body.className = "dt-wacc-body";
     if (isReal) {
-      body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass", opacityKey: "glassOpacity", opacityVar: "--wglass-op" }));
-      body.appendChild(makeTextCtrl(id));
+      if (id === "clock" && settings.clockFormat === "plain") {
+        // plain numbers have no box to fill; the text swatch (with glass) colors
+        // the numbers themselves
+        body.appendChild(makeClockTextCtrl());
+      } else {
+        body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass", opacityKey: "glassOpacity", opacityVar: "--wglass-op" }));
+        body.appendChild(makeTextCtrl(id));
+      }
     }
     for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
     if (id === "clock") {
@@ -6822,7 +6877,7 @@ function renderDesktopClock() {
   const hEl = document.getElementById("dt-clock-h");
   const mEl = document.getElementById("dt-clock-m");
   const apEl = document.getElementById("dt-clock-ampm");
-  const plainEl = document.getElementById("dt-clock-plain");
+  const numEl = document.getElementById("dt-clock-plain-num");
   if (!hEl) return;
   const d = new Date();
   let hr = d.getHours();
@@ -6836,7 +6891,35 @@ function renderDesktopClock() {
   mEl.textContent = mStr;
   apEl.textContent = pm ? "PM" : "AM";
   // "plain numbers" format shows just the time, no AM/PM
-  if (plainEl) plainEl.textContent = hrStr + ":" + mStr;
+  if (numEl) numEl.textContent = hrStr + ":" + mStr;
+  fitClockPlain();
+}
+
+// Size the plain numbers to fill the (possibly stretched) clock frame. Measured
+// against a fixed 2-digit reference so the font stays put as the minute/hour
+// digits change, and it fills the height too once the frame is resized taller.
+function fitClockPlain() {
+  const clock = document.querySelector(".dt-clock");
+  const numEl = document.getElementById("dt-clock-plain-num");
+  if (!clock || !numEl) return;
+  if (settings.clockFormat !== "plain") { numEl.style.fontSize = ""; return; }
+  const cs = getComputedStyle(clock);
+  const availW = clock.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = clock.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  if (availW <= 0) return;
+  const REF = 100;
+  const actual = numEl.textContent;
+  numEl.textContent = "00:00"; // widest case, so the size doesn't jump per-minute
+  numEl.style.fontSize = REF + "px";
+  const w = numEl.offsetWidth || 1;
+  const h = numEl.offsetHeight || 1;
+  numEl.textContent = actual;
+  let size = (availW / w) * REF;
+  // constrain by height only once the frame has an explicit (resized) height,
+  // otherwise the auto-height frame just follows the font and never limits it
+  const resizedH = clock.style.height && clock.style.height !== "auto" && clock.style.height !== "";
+  if (resizedH && availH > 0) size = Math.min(size, (availH / h) * REF);
+  numEl.style.fontSize = Math.max(12, Math.floor(size * 0.92)) + "px";
 }
 
 // Toggle the clock between the "boxes" and "plain numbers" layouts and refresh
@@ -6847,10 +6930,17 @@ function applyClockFormat() {
   renderDesktopClock();
 }
 
+let clockPlainRO = null;
 function startDesktopClock() {
-  if (!document.getElementById("dt-clock-h")) return;
+  const clock = document.querySelector(".dt-clock");
+  if (!clock) return;
   applyClockFormat();
   setInterval(renderDesktopClock, 15000);
+  // refit whenever the frame changes size (resize drag, column reflow, …)
+  if (window.ResizeObserver && !clockPlainRO) {
+    clockPlainRO = new ResizeObserver(() => fitClockPlain());
+    clockPlainRO.observe(clock);
+  }
 }
 
 // ==========================================================================
