@@ -2172,6 +2172,7 @@ body.theme-dark .dex-cell.undiscovered img {
     justify-content: center;
     line-height: 1;
     color: var(--text);
+    mix-blend-mode: var(--wclock-plain-blend, normal); /* "blend" dropdown (plain) */
     font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
   }
   .dt-clock-plain-num {
@@ -2189,6 +2190,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-clock-box {
     position: relative;
     flex: 1;
+    mix-blend-mode: var(--wclock-box-blend, normal); /* "blend" dropdown (boxes) */
     background: var(--dt-clock, #16171a);
     color: #fff;
     border-radius: calc(16px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */

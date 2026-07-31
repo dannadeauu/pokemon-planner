@@ -6201,6 +6201,9 @@ function applyWidgetStyles() {
     if (id === "clock") {
       el.style.setProperty("--wclock-plainop", clockTextGlassOpacity(ws) + "%");
       el.classList.toggle("w-clock-glass", !!ws.textGlass);
+      // blend modes: the fill (boxes) and the number text (plain) each get theirs
+      el.style.setProperty("--wclock-box-blend", ws.boxBlend || "normal");
+      el.style.setProperty("--wclock-plain-blend", ws.plainBlend || "normal");
     }
   }
   applyHabitPartStyles();
@@ -6449,6 +6452,31 @@ function makeClockFormatCtrl() {
   return row;
 }
 
+// CSS mix-blend-mode options offered for the clock.
+const CLOCK_BLEND_MODES = [
+  "normal", "multiply", "screen", "overlay", "darken", "lighten",
+  "color-dodge", "color-burn", "hard-light", "soft-light",
+  "difference", "exclusion", "hue", "saturation", "color", "luminosity",
+];
+
+// Clock "blend" dropdown. It retargets by format: in "boxes" it blends the fill,
+// in "plain numbers" it blends the number text. Each format keeps its own value.
+function makeClockBlendCtrl() {
+  const key = settings.clockFormat === "plain" ? "plainBlend" : "boxBlend";
+  const ws = (deviceStyle.widgetStyles && deviceStyle.widgetStyles.clock) || {};
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<span class="dt-wc-label">blend</span>` +
+    `<select class="dt-wc-select">` +
+    CLOCK_BLEND_MODES.map((m) => `<option value="${m}">${m}</option>`).join("") +
+    `</select>`;
+  const sel = row.querySelector("select");
+  sel.value = ws[key] || "normal";
+  sel.addEventListener("change", () => setWidgetStyleProp("clock", key, sel.value));
+  return row;
+}
+
 // The clock's "text" control in plain mode: colors the numbers, plus a glass
 // checkbox (+ opacity) that makes them translucent/frosted. Mirrors the surface
 // control's layout but drives the number color instead of a box fill.
@@ -6562,6 +6590,7 @@ function renderWidgetList() {
     for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
     if (id === "clock") {
       body.appendChild(makeClockFormatCtrl());
+      body.appendChild(makeClockBlendCtrl());
       body.appendChild(makeClockPadCtrl());
     }
     if (id === "habit") {
