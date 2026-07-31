@@ -2160,6 +2160,25 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     gap: 12px;
     margin-bottom: 18px;
+    container-type: inline-size;
+  }
+  /* "plain numbers" format: hide the boxes, show one resizable line of digits */
+  .dt-clock-plain {
+    display: none;
+    flex: 1;
+    text-align: center;
+    font-size: 26cqi; /* scales with the widget width */
+    font-weight: 800;
+    letter-spacing: 1px;
+    line-height: 1.1;
+    color: var(--text);
+    font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
+  }
+  .dt-clock.dt-clock-plain-mode .dt-clock-box {
+    display: none;
+  }
+  .dt-clock.dt-clock-plain-mode .dt-clock-plain {
+    display: block;
   }
   .dt-clock-box {
     position: relative;
@@ -4016,6 +4035,18 @@ body.theme-dark .dex-cell.undiscovered img {
     accent-color: var(--color-add);
     cursor: pointer;
   }
+  .dt-wc-select {
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 8px;
+    cursor: pointer;
+  }
   .dt-wc-opacity {
     display: inline-flex;
     align-items: center;
@@ -4053,6 +4084,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-widget.w-text,
   .dt-widget.w-text .dt-clock-box,
+  .dt-widget.w-text .dt-clock-plain,
   .dt-widget.w-text h2,
   .dt-widget.w-text .sp-label,
   .dt-widget.w-text .sp-title,

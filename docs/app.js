@@ -436,6 +436,10 @@ const DEFAULT_SETTINGS = {
   // per-role font overrides (null = inherit the base "body text" font)
   fontHeading: null,
   fontClock: null,
+  // clock widget display: "boxes" (two-box layout) or "plain" (resizable digits),
+  // and whether single-digit hours get a leading zero (01:00 vs 1:00).
+  clockFormat: "boxes",
+  clockPadHour: true,
   pageEdit: false,
 };
 
@@ -6410,6 +6414,43 @@ function makeWidgetTextCtrl(id, label, key, defaultVar) {
   return makeSwatchRow(label, ws[key] || fallback, (v) => setWidgetStyleProp(id, key, v));
 }
 
+// Clock "format" dropdown: "boxes" (two-box layout) or "plain numbers".
+function makeClockFormatCtrl() {
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<span class="dt-wc-label">format</span>` +
+    `<select class="dt-wc-select">` +
+    `<option value="boxes">boxes</option>` +
+    `<option value="plain">plain numbers</option>` +
+    `</select>`;
+  const sel = row.querySelector("select");
+  sel.value = settings.clockFormat === "plain" ? "plain" : "boxes";
+  sel.addEventListener("change", () => {
+    settings.clockFormat = sel.value;
+    saveSettings(settings);
+    applyClockFormat();
+    touchPrefs();
+  });
+  return row;
+}
+
+// Clock "zero before one-digit hours" checkbox (01:00 vs 1:00).
+function makeClockPadCtrl() {
+  const row = document.createElement("div");
+  row.className = "dt-wc-row";
+  row.innerHTML =
+    `<label class="dt-wc-glass"><input type="checkbox"${settings.clockPadHour ? " checked" : ""} /><span>zero before one-digit hours</span></label>`;
+  const box = row.querySelector("input");
+  box.addEventListener("change", () => {
+    settings.clockPadHour = box.checked;
+    saveSettings(settings);
+    renderDesktopClock();
+    touchPrefs();
+  });
+  return row;
+}
+
 // Task-name text colors live on the dashboard (deviceStyle.colors), but their
 // controls sit in the "pokemon & tasks" dropdown. `colorKey` is "task" (the task
 // name text) or "taskDone" (done / crossed-out tasks); the swatch seeds from the
@@ -6464,6 +6505,10 @@ function renderWidgetList() {
       body.appendChild(makeTextCtrl(id));
     }
     for (const surf of WIDGET_SURFACES[id] || []) body.appendChild(makeSurfaceCtrl(id, surf));
+    if (id === "clock") {
+      body.appendChild(makeClockFormatCtrl());
+      body.appendChild(makeClockPadCtrl());
+    }
     if (id === "habit") {
       body.appendChild(makeWidgetTextCtrl("habit", "day labels", "dayLabelColor", "--text"));
     }
@@ -6773,23 +6818,39 @@ function downscaleImage(dataUrl, maxW, quality) {
   });
 }
 
-function startDesktopClock() {
+function renderDesktopClock() {
   const hEl = document.getElementById("dt-clock-h");
   const mEl = document.getElementById("dt-clock-m");
   const apEl = document.getElementById("dt-clock-ampm");
+  const plainEl = document.getElementById("dt-clock-plain");
   if (!hEl) return;
-  const tick = () => {
-    const d = new Date();
-    let hr = d.getHours();
-    const pm = hr >= 12;
-    hr = hr % 12;
-    if (hr === 0) hr = 12;
-    hEl.textContent = String(hr).padStart(2, "0");
-    mEl.textContent = String(d.getMinutes()).padStart(2, "0");
-    apEl.textContent = pm ? "PM" : "AM";
-  };
-  tick();
-  setInterval(tick, 15000);
+  const d = new Date();
+  let hr = d.getHours();
+  const pm = hr >= 12;
+  hr = hr % 12;
+  if (hr === 0) hr = 12;
+  // leading zero on single-digit hours is optional (settings.clockPadHour)
+  const hrStr = settings.clockPadHour ? String(hr).padStart(2, "0") : String(hr);
+  const mStr = String(d.getMinutes()).padStart(2, "0");
+  hEl.textContent = hrStr;
+  mEl.textContent = mStr;
+  apEl.textContent = pm ? "PM" : "AM";
+  // "plain numbers" format shows just the time, no AM/PM
+  if (plainEl) plainEl.textContent = hrStr + ":" + mStr;
+}
+
+// Toggle the clock between the "boxes" and "plain numbers" layouts and refresh
+// the displayed time (so a padding change shows immediately).
+function applyClockFormat() {
+  const clock = document.querySelector(".dt-clock");
+  if (clock) clock.classList.toggle("dt-clock-plain-mode", settings.clockFormat === "plain");
+  renderDesktopClock();
+}
+
+function startDesktopClock() {
+  if (!document.getElementById("dt-clock-h")) return;
+  applyClockFormat();
+  setInterval(renderDesktopClock, 15000);
 }
 
 // ==========================================================================
