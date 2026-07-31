@@ -3458,6 +3458,33 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--card);
     color: var(--text);
   }
+  .dt-embed-upload-row {
+    display: flex;
+  }
+  .dt-embed-file {
+    display: none;
+  }
+  .dt-embed-upload {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+  }
+  .dt-embed-upload:hover {
+    border-color: var(--color-add);
+    color: var(--color-add);
+  }
+  .dt-embed-upload:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
   .dt-wacc-remove {
     cursor: pointer;
   }

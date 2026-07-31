@@ -5950,8 +5950,10 @@ function unitName(id) {
   return isEmbedId(id) ? "embed frame" : WIDGET_NAMES[id] || "widget";
 }
 // A pasted link -> a safe iframe src (only http/https; bare domains get https://).
+// Uploaded media is stored inline as a data: URI and passes through unchanged.
 function embedFrameSrc(url) {
   url = (url || "").trim();
+  if (/^data:(image|video)\//i.test(url)) return url; // uploaded media
   if (/^https?:\/\//i.test(url)) return url;
   if (url && /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(url)) return "https://" + url;
   return "";
@@ -6032,10 +6034,10 @@ function makeEmbedEl(id) {
 }
 // Fill an embed's frame from its saved url (or a placeholder when empty).
 function isImageUrl(u) {
-  return /\.(png|jpe?g|gif|webp|svg|bmp|avif|apng|ico)(\?.*)?(#.*)?$/i.test(u);
+  return /^data:image\//i.test(u) || /\.(png|jpe?g|gif|webp|svg|bmp|avif|apng|ico)(\?.*)?(#.*)?$/i.test(u);
 }
 function isVideoUrl(u) {
-  return /\.(mp4|webm|ogg|ogv|mov|m4v)(\?.*)?(#.*)?$/i.test(u);
+  return /^data:video\//i.test(u) || /\.(mp4|webm|ogg|ogv|mov|m4v)(\?.*)?(#.*)?$/i.test(u);
 }
 function renderEmbed(id) {
   const el = widgetEl(id);
@@ -6049,7 +6051,7 @@ function renderEmbed(id) {
   if (!src) {
     const empty = document.createElement("div");
     empty.className = "dt-embed-empty";
-    empty.textContent = "paste a link to embed";
+    empty.textContent = "paste a link or upload media";
     frame.replaceChildren(empty);
   } else if (isImageUrl(src)) {
     // direct image link: fit the picture inside the frame (no cropping)
@@ -6653,6 +6655,7 @@ function renderWidgetList() {
     const body = document.createElement("div");
     body.className = "dt-wacc-body";
     body.appendChild(makeEmbedLinkCtrl(id));
+    body.appendChild(makeEmbedUploadCtrl(id));
     body.appendChild(makeSurfaceCtrl(id, { label: "fill", bgKey: "bg", glassKey: "glass", opacityKey: "glassOpacity", opacityVar: "--wglass-op" }));
     body.appendChild(makeTextCtrl(id));
 
@@ -6691,6 +6694,69 @@ function makeEmbedLinkCtrl(id) {
     }
   });
   row.append(span, input);
+  return row;
+}
+
+// Uploaded media is stored inline as a data: URI in the embed's `url`, so it
+// lives entirely on-device (localStorage) with no external host. Capped so a
+// single file can't blow the storage quota; larger media should be a link.
+const EMBED_UPLOAD_MAX = 4 * 1024 * 1024; // ~4 MB
+function uploadEmbedMedia(id, file, btn) {
+  if (!file) return;
+  if (!/^(image|video)\//i.test(file.type)) {
+    window.alert("please choose an image or video file.");
+    return;
+  }
+  if (file.size > EMBED_UPLOAD_MAX) {
+    window.alert("that file is too large to store on this device (max ~4 MB). try a smaller file, or paste a link instead.");
+    return;
+  }
+  const reader = new FileReader();
+  const label = btn ? btn.textContent : "";
+  if (btn) { btn.textContent = "uploading…"; btn.disabled = true; }
+  const restore = () => { if (btn) { btn.textContent = label; btn.disabled = false; } };
+  reader.onload = () => {
+    const store = embedStore();
+    const prev = store[id] ? { ...store[id] } : { url: "" };
+    store[id] = { ...(store[id] || {}), url: String(reader.result) };
+    try {
+      saveDeviceStyle();
+    } catch (e) {
+      store[id] = prev; // revert so the oversized blob doesn't wedge future saves
+      window.alert("couldn't save that file — this device's storage is full. try a smaller file or paste a link.");
+      restore();
+      return;
+    }
+    renderEmbed(id);
+    renderWidgetList();
+    restore();
+  };
+  reader.onerror = () => {
+    window.alert("couldn't read that file.");
+    restore();
+  };
+  reader.readAsDataURL(file);
+}
+
+// An "upload media" button for an embed frame: picks an image / video file and
+// stores it inline (see uploadEmbedMedia).
+function makeEmbedUploadCtrl(id) {
+  const row = document.createElement("div");
+  row.className = "dt-embed-upload-row";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "dt-embed-upload";
+  btn.textContent = "upload media";
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*,video/*";
+  input.className = "dt-embed-file";
+  btn.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    uploadEmbedMedia(id, input.files && input.files[0], btn);
+    input.value = ""; // let the same file be re-picked later
+  });
+  row.append(btn, input);
   return row;
 }
 
