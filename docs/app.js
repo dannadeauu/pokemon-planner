@@ -4844,12 +4844,11 @@ function applyBackgroundImage() {
     const endColor = b.endColor || (deviceStyle.colors && deviceStyle.colors.bg) || getComputedStyle(document.body).backgroundColor;
     layer.style.background = endColor;
   }
-  // NOTE: intentionally NOT setting `will-change: transform` here. Promoting the
-  // bg layer to its own compositing layer breaks `mix-blend-mode` on widgets that
-  // blend against the background (the clock "blend" dropdown) — content can't
-  // blend against a separately-composited layer. Parallax still works via the
-  // scroll-driven transform in updateBgParallax (cleared to none at the top).
-  layer.style.willChange = "";
+  // Compositing (will-change) is managed dynamically, not here: the layer is
+  // promoted only while the user is actively scrolling (so the parallax transform
+  // is GPU-driven and never lags behind the scroll) and demoted at rest, which
+  // lets mix-blend-mode widgets (the clock "blend") blend against the background.
+  // See onBgParallaxScroll / promoteBgLayer.
   updateBgParallax();
 }
 
@@ -4865,6 +4864,7 @@ function updateBgParallax() {
   const editing = root.classList.contains("dt-bg-editing");
   if (!b.src || !b.parallax || editing) {
     layer.style.transform = "";
+    promoteBgLayer(false);
     return;
   }
   const sy = (document.scrollingElement || document.documentElement).scrollTop || 0;
@@ -4874,7 +4874,24 @@ function updateBgParallax() {
   layer.style.transform = off > 0.5 ? `translateY(${off.toFixed(1)}px)` : "";
 }
 let bgParallaxRaf = 0;
+let bgParallaxIdle = 0;
+// Promote/demote the bg layer's own compositor layer. Promoted (will-change) the
+// parallax transform is GPU-driven and lag-free; demoted, mix-blend-mode widgets
+// (the clock "blend") can blend against the background. Guarded so repeated
+// scroll events don't thrash the style.
+function promoteBgLayer(on) {
+  const layer = document.getElementById("dt-bg-layer");
+  if (!layer) return;
+  const val = on ? "transform" : "";
+  if (layer.style.willChange !== val) layer.style.willChange = val;
+}
 function onBgParallaxScroll() {
+  const b = bgImageCfg();
+  if (b.src && b.parallax) {
+    promoteBgLayer(true); // composite for the duration of this scroll gesture
+    clearTimeout(bgParallaxIdle);
+    bgParallaxIdle = setTimeout(() => promoteBgLayer(false), 180); // demote at rest
+  }
   if (bgParallaxRaf) return;
   bgParallaxRaf = requestAnimationFrame(() => {
     bgParallaxRaf = 0;
