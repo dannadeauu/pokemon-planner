@@ -4844,7 +4844,12 @@ function applyBackgroundImage() {
     const endColor = b.endColor || (deviceStyle.colors && deviceStyle.colors.bg) || getComputedStyle(document.body).backgroundColor;
     layer.style.background = endColor;
   }
-  layer.style.willChange = b.parallax ? "transform" : "";
+  // NOTE: intentionally NOT setting `will-change: transform` here. Promoting the
+  // bg layer to its own compositing layer breaks `mix-blend-mode` on widgets that
+  // blend against the background (the clock "blend" dropdown) — content can't
+  // blend against a separately-composited layer. Parallax still works via the
+  // scroll-driven transform in updateBgParallax (cleared to none at the top).
+  layer.style.willChange = "";
   updateBgParallax();
 }
 
@@ -4863,7 +4868,10 @@ function updateBgParallax() {
     return;
   }
   const sy = (document.scrollingElement || document.documentElement).scrollTop || 0;
-  layer.style.transform = `translateY(${((1 - BG_PARALLAX_FACTOR) * sy).toFixed(1)}px)`;
+  const off = (1 - BG_PARALLAX_FACTOR) * sy;
+  // Clear the transform entirely at the top (transform:none) so the layer stays
+  // un-composited and widgets can blend against it; only offset once scrolled.
+  layer.style.transform = off > 0.5 ? `translateY(${off.toFixed(1)}px)` : "";
 }
 let bgParallaxRaf = 0;
 function onBgParallaxScroll() {
