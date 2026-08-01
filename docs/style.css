@@ -1750,9 +1750,7 @@ body.theme-dark .dex-cell.undiscovered img {
     padding-left: calc(28px + var(--dt-page-ml, 0px));
     padding-right: calc(28px + var(--dt-page-mr, 0px));
   }
-  .dt-title-row {
-    margin-top: var(--dt-page-mt, 0px);
-  }
+  /* (top margin is folded into .dt-title-row's own margin shorthand below) */
   /* inset the edge columns' CONTENTS (not the columns) so the columns keep their
      flex width and the inner columns are untouched */
   .dt-dashboard > .dt-col.dt-col-first > * {
@@ -1871,7 +1869,8 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin: 22px auto 26px;
+    /* base 22px top gap + the draggable page top-margin (space below the banner) */
+    margin: calc(22px + var(--dt-page-mt, 0px)) auto 26px;
   }
   .dt-title {
     font-size: 40px;
