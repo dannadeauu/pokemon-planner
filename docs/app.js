@@ -452,6 +452,11 @@ const APP_FONTS = [
   { label: "Fraunces", stack: "'Fraunces', serif", google: "Fraunces:wght@500;600;700" },
   { label: "Cormorant Garamond", stack: "'Cormorant Garamond', serif", google: "Cormorant+Garamond:wght@600;700" },
   { label: "PT Serif", stack: "'PT Serif', serif", google: "PT+Serif:wght@400;700" },
+  { label: "Bebas Neue", stack: "'Bebas Neue', sans-serif", google: "Bebas+Neue" },
+  { label: "Oswald", stack: "'Oswald', sans-serif", google: "Oswald:wght@500;600;700" },
+  { label: "Anton", stack: "'Anton', sans-serif", google: "Anton" },
+  { label: "Teko", stack: "'Teko', sans-serif", google: "Teko:wght@500;600;700" },
+  { label: "Staatliches", stack: "'Staatliches', sans-serif", google: "Staatliches" },
 ];
 
 function appFontByLabel(label) {
