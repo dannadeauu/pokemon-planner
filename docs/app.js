@@ -4841,6 +4841,18 @@ function applyBackgroundImage() {
   if (b.end === "mirage") {
     layer.classList.add("has-mirage");
     layer.style.background = buildMirageGradient(b.mirage);
+    // Self-heal: if no palette is stored yet (image set before sampling existed,
+    // or an earlier sample failed), sample it from the current image now and
+    // repaint — so the blooms are drawn from the background image, not the
+    // generic fallback rainbow. Remote/CORS-tainted images stay on the fallback.
+    if ((!b.mirage || !b.mirage.length) && b.src) {
+      sampleImageColors(b.src).then((sampled) => {
+        if (!sampled) return;
+        saveBgImageCfg({ mirage: sampled });
+        const cur = bgImageCfg();
+        if (cur.end === "mirage") layer.style.background = buildMirageGradient(cur.mirage);
+      });
+    }
   } else {
     layer.classList.remove("has-mirage");
     const endColor = b.endColor || (deviceStyle.colors && deviceStyle.colors.bg) || getComputedStyle(document.body).backgroundColor;
@@ -5602,18 +5614,9 @@ function initBannerAndBgControls() {
   const solid = document.getElementById("pe-bgend-solid");
   const mirage = document.getElementById("pe-bgend-mirage");
   if (solid) solid.addEventListener("change", () => { if (solid.checked) { saveBgImageCfg({ end: "solid" }); applyBackgroundImage(); } });
-  if (mirage) mirage.addEventListener("change", async () => {
-    if (!mirage.checked) return;
-    // Always drive the gradient from colors sampled out of the current background
-    // image. Re-sample here so turning this on works even when the stored config
-    // has no palette yet (image set before sampling, or an earlier sample failed).
-    const b = bgImageCfg();
-    const sampled = b.src ? await sampleImageColors(b.src) : null;
-    const patch = { end: "mirage" };
-    if (sampled) patch.mirage = sampled;
-    saveBgImageCfg(patch);
-    applyBackgroundImage();
-  });
+  // applyBackgroundImage() self-heals the palette: if none is stored yet it
+  // samples the current image and repaints, so the blooms come from the image.
+  if (mirage) mirage.addEventListener("change", () => { if (mirage.checked) { saveBgImageCfg({ end: "mirage" }); applyBackgroundImage(); } });
   const swatch = document.getElementById("pe-bgend-color");
   if (swatch) {
     swatch.addEventListener("input", () => {
