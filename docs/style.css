@@ -2180,6 +2180,10 @@ body.theme-dark .dex-cell.undiscovered img {
     gap: 12px;
     margin-bottom: 18px;
     container-type: inline-size;
+    /* variable-font axes for the clock font (applyFont sets --font-clock-fvar per
+       the selected font); inherits to the boxes, digits and AM/PM. "normal" for
+       non-variable fonts. Drives SF Pro's (Roboto Flex) condensed width axis. */
+    font-variation-settings: var(--font-clock-fvar, normal);
   }
   /* "plain numbers" format: hide the boxes, show one line of digits that a
      ResizeObserver (fitClockPlain) grows to fill the frame as it's stretched */
@@ -2198,17 +2202,6 @@ body.theme-dark .dex-cell.undiscovered img {
     font-size: 48px; /* seed; fitClockPlain overrides to fill the frame */
     font-weight: 800;
     letter-spacing: 1px;
-  }
-  /* condensed-font squish: fakes compressed-width display fonts (e.g. SF Pro) by
-     scaling the digits horizontally. --clock-condense is 1 (no-op) for normal
-     fonts; applyFont sets it per the selected clock font. Digits only -- never the
-     boxes or the AM/PM label. */
-  #dt-clock-h,
-  #dt-clock-m,
-  .dt-clock-plain-num {
-    display: inline-block;
-    transform: scaleX(var(--clock-condense, 1));
-    transform-origin: center;
   }
   /* clock "blend": self-contained background-blend-mode (see applyClockBlend). The
      element paints an aligned copy of the page background blended with the clock's
