@@ -8085,8 +8085,60 @@ if ("serviceWorker" in navigator) {
       /* ignore */
     }
   }
+  // A/B testbed: render "12:34" with several rendering techniques so we can see
+  // which one actually paints the blended background in the standalone PWA (the
+  // computed styles are correct but the current technique doesn't paint there).
+  function buildSwatches() {
+    if (document.getElementById("__blendab")) return;
+    const IMG = 'var(--dt-bg-image)';
+    const CLIP =
+      `background-image:linear-gradient(#fff,#fff), ${IMG};` +
+      `background-size:100% 100%, cover;background-position:0 0, center;` +
+      `background-repeat:no-repeat,no-repeat;background-blend-mode:multiply,normal;` +
+      `-webkit-background-clip:text;background-clip:text;color:transparent;`;
+    const techniques = [
+      ["T1 current (clip+blend)", CLIP],
+      ["T2 +isolation", "isolation:isolate;" + CLIP],
+      ["T3 +translateZ", "transform:translateZ(0);" + CLIP],
+      ["T4 +will-change", "will-change:transform;" + CLIP],
+      ["T5 image-only clip (no blend)",
+        `background-image:${IMG};background-size:cover;background-position:center;` +
+        `-webkit-background-clip:text;background-clip:text;color:transparent;`],
+      ["T6 BOX blend (no clip)",
+        `background-image:linear-gradient(#16171a,#16171a), ${IMG};` +
+        `background-size:100% 100%, cover;background-repeat:no-repeat;` +
+        `background-blend-mode:multiply,normal;background-color:transparent;` +
+        `color:#8a8f98;padding:6px 10px;border-radius:8px;`],
+    ];
+    const panel = document.createElement("div");
+    panel.id = "__blendab";
+    panel.style.cssText =
+      "position:fixed;top:8px;right:8px;z-index:2147483647;background:rgba(0,0,0,.9);" +
+      "padding:10px;border-radius:8px;max-height:96vh;overflow:auto;width:230px;";
+    panel.innerHTML =
+      '<div style="color:#fff;font:bold 12px monospace;margin-bottom:6px">' +
+      "WHICH SHOW THE IMAGE?</div>";
+    techniques.forEach(([name, css]) => {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "margin-bottom:10px";
+      const lbl = document.createElement("div");
+      lbl.textContent = name;
+      lbl.style.cssText = "color:#9ad;font:11px monospace;margin-bottom:2px";
+      const sw = document.createElement("div");
+      sw.textContent = "12:34";
+      sw.style.cssText = "font:800 40px system-ui,sans-serif;line-height:1;" + css;
+      wrap.appendChild(lbl);
+      wrap.appendChild(sw);
+      panel.appendChild(wrap);
+    });
+    document.body.appendChild(panel);
+  }
+
   window.addEventListener("load", () => {
     render();
     setInterval(render, 1500);
+    // build the A/B swatches after the bg-image var is applied
+    setTimeout(buildSwatches, 1200);
+    setTimeout(buildSwatches, 3000);
   });
 })();
