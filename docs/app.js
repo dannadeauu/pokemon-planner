@@ -457,10 +457,23 @@ const APP_FONTS = [
   { label: "Anton", stack: "'Anton', sans-serif", google: "Anton" },
   { label: "Teko", stack: "'Teko', sans-serif", google: "Teko:wght@500;600;700" },
   { label: "Staatliches", stack: "'Staatliches', sans-serif", google: "Staatliches" },
+  // Apple's system font (no web download). `condense` horizontally squishes the
+  // clock digits via scaleX to fake SF Pro's compressed-width look (see applyFont
+  // / fitClockPlain / --clock-condense in CSS). Only affects the clock role.
+  { label: "SF Pro", stack: "'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", google: null, condense: 0.6 },
 ];
 
 function appFontByLabel(label) {
   return APP_FONTS.find((f) => f.label === label) || APP_FONTS[0];
+}
+
+// Horizontal-squish factor for the *effective* clock font (the explicit clock
+// font, else the body font it inherits). 1 = no squish. Used to fake the
+// compressed width of condensed display fonts like SF Pro.
+function clockCondenseFactor() {
+  const label = settings.fontClock || currentFontLabel();
+  const f = appFontByLabel(label);
+  return f && f.condense ? f.condense : 1;
 }
 
 // Which font this device shows: the mobile-specific one only when signed in,
@@ -503,6 +516,9 @@ function applyFont() {
   };
   setRoleFont("--font-heading", settings.fontHeading);
   setRoleFont("--font-clock", settings.fontClock);
+  // condensed-font squish for the clock digits (scaleX in CSS); re-fit plain mode
+  document.documentElement.style.setProperty("--clock-condense", String(clockCondenseFactor()));
+  if (typeof fitClockPlain === "function") fitClockPlain();
 }
 
 function loadSettings() {
@@ -7138,7 +7154,10 @@ function fitClockPlain() {
   const w = numEl.offsetWidth || 1;
   const h = numEl.offsetHeight || 1;
   numEl.textContent = actual;
-  let size = (availW / w) * REF;
+  // offsetWidth ignores the scaleX squish, so divide it out: condensed digits
+  // occupy w*cond visually, letting the font grow to fill the frame's width.
+  const cond = clockCondenseFactor();
+  let size = (availW / (w * cond)) * REF;
   // constrain by height only once the frame has an explicit (resized) height,
   // otherwise the auto-height frame just follows the font and never limits it
   const resizedH = clock.style.height && clock.style.height !== "auto" && clock.style.height !== "";
