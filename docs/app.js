@@ -4914,11 +4914,12 @@ function applyPageLayout() {
   setVar("--dt-page-mr", pl.pageMarginRight ? pl.pageMarginRight + "px" : "");
 
   const dash = document.querySelector(".dt-dashboard");
-  // Columns auto-size (flex) and reflow now, so the dashboard keeps its default
-  // centered max-width — no saved per-column widths / margins to apply.
   root.style.removeProperty("--dt-ml");
   root.style.removeProperty("--dt-mr");
-  root.style.removeProperty("--dt-content-max");
+  // With a side margin set, drop the centered max-width so the content fills the
+  // screen and the margins measure right out to the screen edge; otherwise keep
+  // the default centered layout.
+  setVar("--dt-content-max", (pl.pageMarginLeft || pl.pageMarginRight) ? "none" : "");
   if (dash) dash.style.gridTemplateColumns = "";
 
   const calRow = document.querySelector(".dt-cal-row");
@@ -7033,12 +7034,12 @@ function startMarginDrag(startEvent, dir) {
     mr: pl.pageMarginRight || 0,
     mt: pl.pageMarginTop || 0,
   };
-  // cap side margins so the edge column keeps a usable content width
-  const dash = document.querySelector(".dt-dashboard");
-  const cols = dash ? [...dash.querySelectorAll(":scope > .dt-col")] : [];
-  const outerW = (col) => (col ? col.getBoundingClientRect().width : 400);
-  const maxL = Math.max(0, outerW(cols[0]) - 60);
-  const maxR = Math.max(0, outerW(cols[cols.length - 1]) - 60);
+  // let the margins run out toward the screen edge; only reserve a minimum strip
+  // of content width so the columns never fully collapse
+  const MIN_CONTENT = 160;
+  const avail = document.documentElement.clientWidth - PAGE_PAD * 2;
+  const maxL = Math.max(0, avail - start.mr - MIN_CONTENT);
+  const maxR = Math.max(0, avail - start.ml - MIN_CONTENT);
   pageDrag(
     startEvent,
     (dx, dy) => {

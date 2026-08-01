@@ -1733,31 +1733,18 @@ body.theme-dark .dex-cell.undiscovered img {
     display: none;
   }
 
+  /* Global page margins (edit-mode drag handles) fold straight into the content
+     side padding, so the top row, dashboard and every section inset together and
+     the margins can grow all the way out to the screen edge. Top margin lives in
+     .dt-title-row's margin shorthand below. */
   .dt-title-row,
   .dt-dashboard,
   .dt-section {
     max-width: var(--dt-content-max, 1340px);
     margin-left: var(--dt-ml, auto);
     margin-right: var(--dt-mr, auto);
-    padding-left: 28px;
-    padding-right: 28px;
-  }
-  /* page margins (edit-mode drag handles). Side margins inset the single-column
-     blocks (title / sections) directly, and the dashboard's edge columns only
-     (so inner columns keep their width). Top margin adds space above the content. */
-  .dt-title-row,
-  .dt-section {
     padding-left: calc(28px + var(--dt-page-ml, 0px));
     padding-right: calc(28px + var(--dt-page-mr, 0px));
-  }
-  /* (top margin is folded into .dt-title-row's own margin shorthand below) */
-  /* inset the edge columns' CONTENTS (not the columns) so the columns keep their
-     flex width and the inner columns are untouched */
-  .dt-dashboard > .dt-col.dt-col-first > * {
-    margin-left: var(--dt-page-ml, 0px);
-  }
-  .dt-dashboard > .dt-col.dt-col-last > * {
-    margin-right: var(--dt-page-mr, 0px);
   }
   /* page-edit recolors (desktop only; fall back to the theme values) */
   body {
