@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, runtime-cache sprites so the app
 // works offline after first load. Bump VERSION whenever shell files change.
-const VERSION = "myteam-v123";
+const VERSION = "myteam-v125";
 
 const SHELL = [
   "./",
@@ -91,9 +91,39 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Same-origin shell + local sprites: cache first, fill from network on miss.
-  // Only real successes (response.ok) are cached, so a 404 never sticks - the
-  // next load retries it (e.g. an icon that wasn't deployed yet).
+  // Same-origin app code (scripts + styles): stale-while-revalidate. Serve the
+  // cached copy instantly (fast, offline-capable) AND fetch a fresh copy in the
+  // background so a new deploy lands on the very next load - even if VERSION
+  // wasn't bumped. This is what keeps the installed PWA from silently drifting
+  // behind the web version (the cache-first-only shell used to freeze app.js /
+  // style.css until VERSION changed, so a missed bump left the PWA stale). Only
+  // real successes (response.ok) overwrite the cache, so a blip/404 never sticks.
+  // The revalidation uses cache:"no-cache" so it always checks the server (a
+  // conditional request: 304 when unchanged, 200 with new bytes when changed) -
+  // otherwise the browser's HTTP cache would hand back a stale copy within its
+  // max-age (GitHub Pages defaults to ~10 min) and we'd just re-cache stale.
+  if (request.destination === "script" || request.destination === "style") {
+    const fresh = fetch(request, { cache: "no-cache" })
+      .then(async (response) => {
+        if (response.ok) {
+          const cache = await caches.open(VERSION);
+          await cache.put(request, response.clone());
+        }
+        return response;
+      })
+      .catch(() => null);
+    event.waitUntil(fresh); // keep the worker alive for the background refresh
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fresh.then((r) => r || Response.error()))
+    );
+    return;
+  }
+
+  // Other same-origin assets (local sprites, icons, manifest): cache first, fill
+  // from network on miss. These are effectively immutable per deploy, so there's
+  // no benefit to revalidating them every load. Only real successes (response.ok)
+  // are cached, so a 404 never sticks - the next load retries it (e.g. an icon
+  // that wasn't deployed yet).
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
