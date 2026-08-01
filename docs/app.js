@@ -5602,7 +5602,18 @@ function initBannerAndBgControls() {
   const solid = document.getElementById("pe-bgend-solid");
   const mirage = document.getElementById("pe-bgend-mirage");
   if (solid) solid.addEventListener("change", () => { if (solid.checked) { saveBgImageCfg({ end: "solid" }); applyBackgroundImage(); } });
-  if (mirage) mirage.addEventListener("change", () => { if (mirage.checked) { saveBgImageCfg({ end: "mirage" }); applyBackgroundImage(); } });
+  if (mirage) mirage.addEventListener("change", async () => {
+    if (!mirage.checked) return;
+    // Always drive the gradient from colors sampled out of the current background
+    // image. Re-sample here so turning this on works even when the stored config
+    // has no palette yet (image set before sampling, or an earlier sample failed).
+    const b = bgImageCfg();
+    const sampled = b.src ? await sampleImageColors(b.src) : null;
+    const patch = { end: "mirage" };
+    if (sampled) patch.mirage = sampled;
+    saveBgImageCfg(patch);
+    applyBackgroundImage();
+  });
   const swatch = document.getElementById("pe-bgend-color");
   if (swatch) {
     swatch.addEventListener("input", () => {
@@ -6187,12 +6198,7 @@ function applyDashboard() {
   }
   // apply the saved per-column widths (drag-to-resize); equal by default
   const flex = columnFlex(colEls.length);
-  colEls.forEach((colEl, i) => {
-    colEl.style.flex = (flex[i] || 1) + " 1 0";
-    // tag the edge columns so page side-margins inset only them (CSS)
-    colEl.classList.toggle("dt-col-first", i === 0);
-    colEl.classList.toggle("dt-col-last", i === colEls.length - 1);
-  });
+  colEls.forEach((colEl, i) => (colEl.style.flex = (flex[i] || 1) + " 1 0"));
   if (pageEditMode) {
     buildColumnResizers(); // divider handles follow the new columns
     repositionMarginHandles(); // margin handles track the new dashboard geometry
