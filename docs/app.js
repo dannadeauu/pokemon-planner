@@ -7034,12 +7034,15 @@ function startMarginDrag(startEvent, dir) {
     mr: pl.pageMarginRight || 0,
     mt: pl.pageMarginTop || 0,
   };
-  // let the margins run out toward the screen edge; only reserve a minimum strip
-  // of content width so the columns never fully collapse
-  const MIN_CONTENT = 160;
+  // let the margins run out toward the screen edge — capped only so the columns
+  // stay at their min-width (never overflow / collapse)
+  const dash = document.querySelector(".dt-dashboard");
+  const cols = dash ? [...dash.querySelectorAll(":scope > .dt-col")] : [];
+  const gap = dash ? parseFloat(getComputedStyle(dash).columnGap) || 0 : 0;
+  const colsMin = cols.length ? cols.length * 120 + gap * (cols.length - 1) : 160;
   const avail = document.documentElement.clientWidth - PAGE_PAD * 2;
-  const maxL = Math.max(0, avail - start.mr - MIN_CONTENT);
-  const maxR = Math.max(0, avail - start.ml - MIN_CONTENT);
+  const maxL = Math.max(0, avail - start.mr - colsMin);
+  const maxR = Math.max(0, avail - start.ml - colsMin);
   pageDrag(
     startEvent,
     (dx, dy) => {
