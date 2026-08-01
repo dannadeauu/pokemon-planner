@@ -2208,11 +2208,34 @@ body.theme-dark .dex-cell.undiscovered img {
     text-box-trim: trim-both;
     text-box-edge: cap alphabetic;
   }
-  /* clock "blend": self-contained background-blend-mode (see applyClockBlend). The
-     element paints an aligned copy of the page background blended with the clock's
-     color — works over a scrolling/parallaxing GPU background with no lag, unlike
-     mix-blend-mode. Plain numbers use the digits as the window (background-clip). */
+  /* clock "blend": the clock color is pre-blended into an aligned copy of the page
+     background in a canvas (applyClockBlend / blendClockImage) and shown as ONE
+     image layer — clipped to the digits (plain, via background-clip) or as the box
+     fill (boxes). Using a pre-blended image instead of CSS background-blend-mode is
+     deliberate: some browsers (Chromium in an installed PWA) compute background-
+     blend-mode but never paint it, leaving the clock opaque. A plain image layer
+     paints everywhere, and stays lag-free over the parallaxing GPU background. */
   .dt-clock-plain-num.clock-blend-on {
+    background-image: var(--clock-blend-img, none);
+    background-repeat: no-repeat;
+    background-size: var(--clock-blend-size, cover);
+    background-position: var(--clock-blend-pos, center);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dt-clock-box.clock-blend-on {
+    background-image: var(--clock-blend-img, none) !important;
+    background-repeat: no-repeat !important;
+    background-size: var(--clock-blend-size, cover) !important;
+    background-position: var(--clock-blend-pos, center) !important;
+    background-color: transparent !important;
+  }
+  /* fallback for cross-origin background images, whose pixels a canvas can't read
+     (tainted) — applyClockBlend adds .clock-blend-css and we blend with CSS
+     background-blend-mode. Works in a normal browser tab; may not paint in an
+     installed PWA, so uploading the image (same-origin) is the reliable route. */
+  .dt-clock-plain-num.clock-blend-on.clock-blend-css {
     background-image:
       linear-gradient(var(--clock-blend-color, #fff), var(--clock-blend-color, #fff)),
       var(--clock-blend-img, none);
@@ -2220,11 +2243,8 @@ body.theme-dark .dex-cell.undiscovered img {
     background-size: 100% 100%, var(--clock-blend-size, cover);
     background-position: 0 0, var(--clock-blend-pos, center);
     background-blend-mode: var(--clock-blend-mode, normal), normal;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
   }
-  .dt-clock-box.clock-blend-on {
+  .dt-clock-box.clock-blend-on.clock-blend-css {
     background-image:
       linear-gradient(var(--clock-blend-color, #16171a), var(--clock-blend-color, #16171a)),
       var(--clock-blend-img, none) !important;
@@ -2232,7 +2252,6 @@ body.theme-dark .dex-cell.undiscovered img {
     background-size: 100% 100%, var(--clock-blend-size, cover) !important;
     background-position: 0 0, var(--clock-blend-pos, center) !important;
     background-blend-mode: var(--clock-blend-mode, normal), normal !important;
-    background-color: transparent !important;
   }
   .dt-clock.dt-clock-plain-mode .dt-clock-box {
     display: none;

@@ -7195,6 +7195,65 @@ function loadBgImgNatural() {
   im.src = b.src;
 }
 
+// Pre-blend `color` into `imgSrc` with CSS blend `mode` in a canvas (whose
+// globalCompositeOperation mirrors the CSS blend-mode names exactly) and return a
+// data-URL via `done`, cached by src+color+mode. We bake the blend into a single
+// image because some browsers - notably Chromium in an *installed PWA* - compute
+// CSS background-blend-mode but never paint it, leaving the clock opaque. A single
+// already-blended image clipped to text / used as the box fill paints reliably.
+// Cross-origin images taint the canvas -> done(null); the caller then falls back
+// to CSS background-blend-mode (which still works in a normal browser tab).
+let clockBlendImgCache = { key: null, url: null };
+function blendClockImage(imgSrc, color, mode, done) {
+  const key = color + "|" + mode + "|" + imgSrc.length + "|" + imgSrc.slice(-40);
+  if (clockBlendImgCache.key === key) return done(clockBlendImgCache.url);
+  const img = new Image();
+  img.onload = () => {
+    let url = null;
+    try {
+      const maxDim = 1400; // the clock is small; cap size to keep the data-URL light
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round((img.naturalWidth || 1) * scale));
+      c.height = Math.max(1, Math.round((img.naturalHeight || 1) * scale));
+      const x = c.getContext("2d");
+      x.drawImage(img, 0, 0, c.width, c.height);
+      x.globalCompositeOperation = mode === "normal" ? "source-over" : mode;
+      x.fillStyle = color;
+      x.fillRect(0, 0, c.width, c.height);
+      url = c.toDataURL("image/jpeg", 0.9);
+    } catch (e) {
+      url = null; // tainted (cross-origin) canvas
+    }
+    clockBlendImgCache = { key, url };
+    done(url);
+  };
+  img.onerror = () => {
+    clockBlendImgCache = { key, url: null };
+    done(null);
+  };
+  img.src = imgSrc;
+}
+
+// Blend two solid colors with a CSS blend mode (1x1 canvas, synchronous). Used
+// for the clock blend when there's no background image (blend against the page).
+function blendSolidColor(base, top, mode) {
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    const x = c.getContext("2d");
+    x.fillStyle = base;
+    x.fillRect(0, 0, 1, 1);
+    x.globalCompositeOperation = mode === "normal" ? "source-over" : mode;
+    x.fillStyle = top;
+    x.fillRect(0, 0, 1, 1);
+    const d = x.getImageData(0, 0, 1, 1).data;
+    return `rgb(${d[0]}, ${d[1]}, ${d[2]})`;
+  } catch (e) {
+    return top;
+  }
+}
+
 function applyClockBlend() {
   const root = document.getElementById("dt-root");
   if (!root) return;
@@ -7208,24 +7267,41 @@ function applyClockBlend() {
     (cs.getPropertyValue("--dt-bg") || "").trim() ||
     (cs.getPropertyValue("--bg") || "").trim() ||
     "#eceef2";
-  // the base layer the clock color blends against: the real image, or (no image)
-  // a solid swatch of the page color so the effect still does something
-  const imgLayer = hasImg ? "var(--dt-bg-image)" : `linear-gradient(${pageColor}, ${pageColor})`;
+  const bgSrc = hasImg ? bgImageCfg().src || null : null;
 
   const setup = (el, on, color) => {
     if (!el) return;
-    if (on) {
-      el.style.setProperty("--clock-blend-color", color);
-      el.style.setProperty("--clock-blend-img", imgLayer);
-      el.style.setProperty("--clock-blend-mode", mode);
-      el.classList.add("clock-blend-on");
-    } else {
-      el.classList.remove("clock-blend-on");
+    if (!on) {
+      el.classList.remove("clock-blend-on", "clock-blend-css");
       el.style.removeProperty("--clock-blend-color");
       el.style.removeProperty("--clock-blend-img");
       el.style.removeProperty("--clock-blend-mode");
       el.style.removeProperty("--clock-blend-size");
       el.style.removeProperty("--clock-blend-pos");
+      return;
+    }
+    el.classList.add("clock-blend-on");
+    if (bgSrc) {
+      // preferred path: bake color+image into one image (paints in every browser,
+      // incl. installed PWAs). blendClockImage falls back to null for cross-origin
+      // images (canvas tainted) -> use CSS background-blend-mode instead.
+      blendClockImage(bgSrc, color, mode, (url) => {
+        if (url) {
+          el.classList.remove("clock-blend-css");
+          el.style.setProperty("--clock-blend-img", `url("${url}")`);
+        } else {
+          el.classList.add("clock-blend-css");
+          el.style.setProperty("--clock-blend-color", color);
+          el.style.setProperty("--clock-blend-mode", mode);
+          el.style.setProperty("--clock-blend-img", "var(--dt-bg-image)");
+        }
+        syncClockBlendBg();
+      });
+    } else {
+      // no image: blend the color against the page color -> a solid tint swatch
+      el.classList.remove("clock-blend-css");
+      const solid = blendSolidColor(pageColor, color, mode);
+      el.style.setProperty("--clock-blend-img", `linear-gradient(${solid}, ${solid})`);
     }
   };
 
@@ -8024,121 +8100,3 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js");
 }
 
-// ===== TEMPORARY clock-blend debug readout (remove after diagnosing) =====
-// Shows the live computed state of the clock blend in a corner box so it can be
-// read without DevTools (needed to diagnose the PWA-only "clock stays opaque"
-// issue). Safe: passive, plain text, self-contained.
-(function blendDebugSetup() {
-  function render() {
-    try {
-      const st = JSON.parse(localStorage.getItem("todo-app-settings") || "{}");
-      const ds = JSON.parse(localStorage.getItem("todo-app-device-style") || "{}");
-      const plain = st.clockFormat === "plain";
-      const el = plain
-        ? document.getElementById("dt-clock-plain-num")
-        : document.querySelector(".dt-clock-box");
-      const cs = el ? getComputedStyle(el) : {};
-      const root = document.getElementById("dt-root");
-      const clockCfg = (ds.widgetStyles && ds.widgetStyles.clock) || null;
-      const info = {
-        standalone: matchMedia("(display-mode: standalone)").matches,
-        innerWidth: window.innerWidth,
-        desktopMQ: matchMedia("(min-width: 1024px)").matches,
-        clockFormat: st.clockFormat,
-        blendCfg: clockCfg,
-        activeMode: clockCfg ? (plain ? clockCfg.plainBlend : clockCfg.boxBlend) || "normal" : "none",
-        hasBgImage: root ? root.classList.contains("has-bg-image") : null,
-        dtBgImgVar: (getComputedStyle(document.documentElement).getPropertyValue("--dt-bg-image") || "").slice(0, 20),
-        target: plain ? "plain-num" : "box",
-        elFound: !!el,
-        blendClass: el ? el.classList.contains("clock-blend-on") : null,
-        blendMode: cs.backgroundBlendMode,
-        bgColor: cs.backgroundColor,
-        color: cs.color,
-        bgClip: cs.webkitBackgroundClip || cs.backgroundClip,
-        bgImg: (cs.backgroundImage || "").slice(0, 28),
-      };
-      let box = document.getElementById("__blenddbg");
-      if (!box) {
-        box = document.createElement("div");
-        box.id = "__blenddbg";
-        box.style.cssText =
-          "position:fixed;top:8px;left:8px;z-index:2147483647;background:rgba(0,0,0,.88);" +
-          "color:#3f6;font:11px/1.45 monospace;padding:8px 10px;border-radius:8px;max-width:360px;" +
-          "white-space:pre-wrap;cursor:pointer;";
-        box.title = "tap to copy";
-        box.addEventListener("click", () => {
-          if (navigator.clipboard) navigator.clipboard.writeText(box.dataset.txt || "");
-        });
-        document.body.appendChild(box);
-      }
-      let txt = "CLOCK-BLEND DEBUG (tap to copy)\n" + JSON.stringify(info, null, 1);
-      box.dataset.txt = txt;
-      box.textContent = txt;
-      if (window.caches) {
-        caches.keys().then((k) => {
-          box.textContent = txt + "\ncaches: " + k.join(", ");
-          box.dataset.txt = box.textContent;
-        });
-      }
-    } catch (e) {
-      /* ignore */
-    }
-  }
-  // A/B testbed: render "12:34" with several rendering techniques so we can see
-  // which one actually paints the blended background in the standalone PWA (the
-  // computed styles are correct but the current technique doesn't paint there).
-  function buildSwatches() {
-    if (document.getElementById("__blendab")) return;
-    const IMG = 'var(--dt-bg-image)';
-    const CLIP =
-      `background-image:linear-gradient(#fff,#fff), ${IMG};` +
-      `background-size:100% 100%, cover;background-position:0 0, center;` +
-      `background-repeat:no-repeat,no-repeat;background-blend-mode:multiply,normal;` +
-      `-webkit-background-clip:text;background-clip:text;color:transparent;`;
-    const techniques = [
-      ["T1 current (clip+blend)", CLIP],
-      ["T2 +isolation", "isolation:isolate;" + CLIP],
-      ["T3 +translateZ", "transform:translateZ(0);" + CLIP],
-      ["T4 +will-change", "will-change:transform;" + CLIP],
-      ["T5 image-only clip (no blend)",
-        `background-image:${IMG};background-size:cover;background-position:center;` +
-        `-webkit-background-clip:text;background-clip:text;color:transparent;`],
-      ["T6 BOX blend (no clip)",
-        `background-image:linear-gradient(#16171a,#16171a), ${IMG};` +
-        `background-size:100% 100%, cover;background-repeat:no-repeat;` +
-        `background-blend-mode:multiply,normal;background-color:transparent;` +
-        `color:#8a8f98;padding:6px 10px;border-radius:8px;`],
-    ];
-    const panel = document.createElement("div");
-    panel.id = "__blendab";
-    panel.style.cssText =
-      "position:fixed;top:8px;right:8px;z-index:2147483647;background:rgba(0,0,0,.9);" +
-      "padding:10px;border-radius:8px;max-height:96vh;overflow:auto;width:230px;";
-    panel.innerHTML =
-      '<div style="color:#fff;font:bold 12px monospace;margin-bottom:6px">' +
-      "WHICH SHOW THE IMAGE?</div>";
-    techniques.forEach(([name, css]) => {
-      const wrap = document.createElement("div");
-      wrap.style.cssText = "margin-bottom:10px";
-      const lbl = document.createElement("div");
-      lbl.textContent = name;
-      lbl.style.cssText = "color:#9ad;font:11px monospace;margin-bottom:2px";
-      const sw = document.createElement("div");
-      sw.textContent = "12:34";
-      sw.style.cssText = "font:800 40px system-ui,sans-serif;line-height:1;" + css;
-      wrap.appendChild(lbl);
-      wrap.appendChild(sw);
-      panel.appendChild(wrap);
-    });
-    document.body.appendChild(panel);
-  }
-
-  window.addEventListener("load", () => {
-    render();
-    setInterval(render, 1500);
-    // build the A/B swatches after the bg-image var is applied
-    setTimeout(buildSwatches, 1200);
-    setTimeout(buildSwatches, 3000);
-  });
-})();
