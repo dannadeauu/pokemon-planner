@@ -1,6 +1,6 @@
 // Service worker: precache the app shell, runtime-cache sprites so the app
 // works offline after first load. Bump VERSION whenever shell files change.
-const VERSION = "myteam-v125";
+const VERSION = "myteam-v126";
 
 const SHELL = [
   "./",
@@ -85,8 +85,20 @@ self.addEventListener("fetch", (event) => {
       .catch(() => null);
     event.waitUntil(fresh);
     // Serve the cached copy immediately if we have one, else wait on the network.
+    // BUT never hand an opaque cached copy to a cors-mode request (e.g. the
+    // crossOrigin="anonymous" canvas colour-sampling of the background image):
+    // the browser rejects it with "a ServiceWorker passed an opaque Response to
+    // FetchEvent.respondWith() while handling a 'cors' FetchEvent", which aborts
+    // the load and was breaking hotlinked (cross-origin) background images in the
+    // installed PWA. Cross-origin fonts are also cors-mode but come back
+    // non-opaque, so they still serve from cache normally. For the opaque+cors
+    // case we fall through to the network; a host with no CORS headers just fails
+    // cleanly there (the app already falls back), instead of throwing here.
     event.respondWith(
-      caches.match(request).then((cached) => cached || fresh.then((r) => r || Response.error()))
+      caches.match(request).then((cached) => {
+        if (cached && !(request.mode === "cors" && cached.type === "opaque")) return cached;
+        return fresh.then((r) => r || Response.error());
+      })
     );
     return;
   }
