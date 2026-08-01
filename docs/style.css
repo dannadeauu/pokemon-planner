@@ -2202,6 +2202,11 @@ body.theme-dark .dex-cell.undiscovered img {
     font-size: 48px; /* seed; fitClockPlain overrides to fill the frame */
     font-weight: 800;
     letter-spacing: 1px;
+    /* trim the font's leading so the digits' cap-to-baseline ink hugs the frame
+       top and bottom (no dead space above/below). The auto-height frame then
+       follows the glyphs. Degrades to normal leading on browsers without support. */
+    text-box-trim: trim-both;
+    text-box-edge: cap alphabetic;
   }
   /* clock "blend": self-contained background-blend-mode (see applyClockBlend). The
      element paints an aligned copy of the page background blended with the clock's
