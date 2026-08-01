@@ -8023,3 +8023,70 @@ DESKTOP_MQ.addEventListener("change", () => location.reload());
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js");
 }
+
+// ===== TEMPORARY clock-blend debug readout (remove after diagnosing) =====
+// Shows the live computed state of the clock blend in a corner box so it can be
+// read without DevTools (needed to diagnose the PWA-only "clock stays opaque"
+// issue). Safe: passive, plain text, self-contained.
+(function blendDebugSetup() {
+  function render() {
+    try {
+      const st = JSON.parse(localStorage.getItem("todo-app-settings") || "{}");
+      const ds = JSON.parse(localStorage.getItem("todo-app-device-style") || "{}");
+      const plain = st.clockFormat === "plain";
+      const el = plain
+        ? document.getElementById("dt-clock-plain-num")
+        : document.querySelector(".dt-clock-box");
+      const cs = el ? getComputedStyle(el) : {};
+      const root = document.getElementById("dt-root");
+      const clockCfg = (ds.widgetStyles && ds.widgetStyles.clock) || null;
+      const info = {
+        standalone: matchMedia("(display-mode: standalone)").matches,
+        innerWidth: window.innerWidth,
+        desktopMQ: matchMedia("(min-width: 1024px)").matches,
+        clockFormat: st.clockFormat,
+        blendCfg: clockCfg,
+        activeMode: clockCfg ? (plain ? clockCfg.plainBlend : clockCfg.boxBlend) || "normal" : "none",
+        hasBgImage: root ? root.classList.contains("has-bg-image") : null,
+        dtBgImgVar: (getComputedStyle(document.documentElement).getPropertyValue("--dt-bg-image") || "").slice(0, 20),
+        target: plain ? "plain-num" : "box",
+        elFound: !!el,
+        blendClass: el ? el.classList.contains("clock-blend-on") : null,
+        blendMode: cs.backgroundBlendMode,
+        bgColor: cs.backgroundColor,
+        color: cs.color,
+        bgClip: cs.webkitBackgroundClip || cs.backgroundClip,
+        bgImg: (cs.backgroundImage || "").slice(0, 28),
+      };
+      let box = document.getElementById("__blenddbg");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "__blenddbg";
+        box.style.cssText =
+          "position:fixed;top:8px;left:8px;z-index:2147483647;background:rgba(0,0,0,.88);" +
+          "color:#3f6;font:11px/1.45 monospace;padding:8px 10px;border-radius:8px;max-width:360px;" +
+          "white-space:pre-wrap;cursor:pointer;";
+        box.title = "tap to copy";
+        box.addEventListener("click", () => {
+          if (navigator.clipboard) navigator.clipboard.writeText(box.dataset.txt || "");
+        });
+        document.body.appendChild(box);
+      }
+      let txt = "CLOCK-BLEND DEBUG (tap to copy)\n" + JSON.stringify(info, null, 1);
+      box.dataset.txt = txt;
+      box.textContent = txt;
+      if (window.caches) {
+        caches.keys().then((k) => {
+          box.textContent = txt + "\ncaches: " + k.join(", ");
+          box.dataset.txt = box.textContent;
+        });
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  window.addEventListener("load", () => {
+    render();
+    setInterval(render, 1500);
+  });
+})();
