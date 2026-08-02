@@ -12,6 +12,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "5051", "--directory", "docs"],
       "port": 5051
+    },
+    {
+      "name": "ems-mems",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "/Users/daniellenadeau/Desktop/ems-mems"],
+      "port": 8765
     }
   ]
 }
