@@ -281,7 +281,7 @@ h1 {
 
 .todo-item .text {
   flex: 1;
-  font-size: 16px;
+  font-size: calc(16px * var(--task-text-scale, 1)); /* "task text size" slider (text tab) */
   font-weight: 500;
   word-break: break-word;
 }
@@ -294,7 +294,7 @@ h1 {
 .edit-input {
   flex: 1;
   font-family: inherit;
-  font-size: 16px;
+  font-size: calc(16px * var(--task-text-scale, 1)); /* match .todo-item .text so editing keeps the chosen size */
   font-weight: 500;
   border: none;
   border-bottom: 2px solid var(--color-add);
@@ -341,6 +341,12 @@ h1 {
   object-fit: contain;
   image-rendering: pixelated;
   flex-shrink: 0;
+}
+
+/* main task list box sprites: a touch smaller than the default 40px */
+#todo-list .sprite {
+  width: 37px;
+  height: 37px;
 }
 
 .mega-stone-btn {

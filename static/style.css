@@ -343,6 +343,12 @@ h1 {
   flex-shrink: 0;
 }
 
+/* main task list box sprites: a touch smaller than the default 40px */
+#todo-list .sprite {
+  width: 37px;
+  height: 37px;
+}
+
 .mega-stone-btn {
   border: none;
   background: radial-gradient(circle, #fff7d6 0%, #f3d675 100%);

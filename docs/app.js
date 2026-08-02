@@ -4739,13 +4739,14 @@ function loadDeviceStyle() {
         bgImage: s.bgImage && typeof s.bgImage === "object" ? s.bgImage : null,
         menuSize: s.menuSize && typeof s.menuSize === "object" ? s.menuSize : null,
         pageRadius: typeof s.pageRadius === "number" ? s.pageRadius : null,
+        taskTextScale: typeof s.taskTextScale === "number" ? s.taskTextScale : null,
         embeds: s.embeds && typeof s.embeds === "object" ? s.embeds : {},
       };
     }
   } catch (e) {
     // fall through to defaults
   }
-  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null, pageRadius: null, embeds: {} };
+  return { colors: {}, richText: {}, menuPos: null, widgets: null, widgetStyles: {}, widgetGap: null, bgImage: null, menuSize: null, pageRadius: null, taskTextScale: null, embeds: {} };
 }
 let deviceStyle = loadDeviceStyle();
 function saveDeviceStyle() {
@@ -4760,6 +4761,16 @@ function pageRadiusScale() {
 }
 function applyPageRadius() {
   document.documentElement.style.setProperty("--page-radius-scale", String(pageRadiusScale()));
+}
+
+// Task text size (text tab). Scales the task-name text across the main list, the
+// calendar-side team list, and the habit-tracker tasks via --task-text-scale.
+// 1 = design default (16px).
+function taskTextScale() {
+  return typeof deviceStyle.taskTextScale === "number" ? deviceStyle.taskTextScale : 1;
+}
+function applyTaskTextScale() {
+  document.documentElement.style.setProperty("--task-text-scale", String(taskTextScale()));
 }
 function stripHtml(html) {
   const d = document.createElement("div");
@@ -5521,6 +5532,8 @@ function syncBgImageInputs() {
   if (remove) remove.disabled = !hasImg;
   const pageRadius = document.getElementById("pe-page-radius");
   if (pageRadius) pageRadius.value = String(Math.round(pageRadiusScale() * 100));
+  const taskTextSize = document.getElementById("pe-task-text-size");
+  if (taskTextSize) taskTextSize.value = String(Math.round(taskTextScale() * 100));
   const zoom = document.getElementById("pe-bgimg-zoom");
   if (zoom) zoom.value = String(b.zoom || 100);
   const height = document.getElementById("pe-bgimg-height");
@@ -5612,6 +5625,16 @@ function initBannerAndBgControls() {
       deviceStyle.pageRadius = (parseInt(pageRadius.value, 10) || 0) / 100;
       saveDeviceStyle();
       applyPageRadius();
+    });
+  }
+
+  // --- task text size slider (text tab) ---
+  const taskTextSize = document.getElementById("pe-task-text-size");
+  if (taskTextSize) {
+    taskTextSize.addEventListener("input", () => {
+      deviceStyle.taskTextScale = (parseInt(taskTextSize.value, 10) || 100) / 100;
+      saveDeviceStyle();
+      applyTaskTextScale();
     });
   }
 
@@ -8173,6 +8196,7 @@ function buildDesktop() {
   window.addEventListener("resize", repositionMarginHandles);
   window.addEventListener("scroll", () => { if (pageEditMode) repositionMarginHandles(); }, { passive: true });
   applyPageRadius(); // page corner-rounding (style tab)
+  applyTaskTextScale(); // task text size (text tab)
 
   // one-time migration: adopt any previously-synced page-edit colors as this
   // device's local colors (colors are per-device now, no longer synced)
