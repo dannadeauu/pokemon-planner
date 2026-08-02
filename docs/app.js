@@ -4567,6 +4567,13 @@ function pageLayout() {
 // (right boundary − column left), where the right boundary is the viewport edge
 // for the last column or the column's own right edge otherwise.
 function itemMaxWidth(el) {
+  // inside a split row (two+ widgets side by side) a box may only fill its own
+  // widget's share of the column, not the whole column
+  const wrap = el.closest(".dt-widget");
+  const row = wrap && wrap.parentElement;
+  if (row && row.classList.contains("dt-row-split")) {
+    return Math.max(1, wrap.clientWidth);
+  }
   let cell = el;
   while (
     cell.parentElement &&
@@ -6009,25 +6016,49 @@ function embedFrameSrc(url) {
   return "";
 }
 const MAX_COLUMNS = 6;
+// Cap side-by-side widgets in one row so each stays wider than .dt-col's min.
+const MAX_ROW_WIDGETS = 3;
 const DEFAULT_COLUMNS = [["team"], ["tasks"], ["clock", "habit"], ["spotify", "pokepark"]];
 
-// Per-device column layout: an array of columns, each an ordered list of unit
-// ids. Falls back to the legacy {mid,right} order, then the default.
+// A column is an ordered list of *rows*; a row is an ordered list of unit ids
+// that share one horizontal line (usually just one). Normalizes both shapes:
+//   new: [["clock", "habit"], ["spotify"]]   -> two rows, first is a split pair
+//   old: ["clock", "habit"]                  -> two single-widget rows (stacked)
+// so saved flat-string columns keep rendering exactly as before.
+function normalizeColumn(col) {
+  if (!Array.isArray(col)) return [];
+  return col
+    .map((row) =>
+      Array.isArray(row)
+        ? row.filter((id) => isKnownUnit(id))
+        : isKnownUnit(row)
+          ? [row]
+          : []
+    )
+    .filter((row) => row.length);
+}
+
+// Per-device column layout: an array of columns, each an ordered list of rows
+// (see normalizeColumn). Falls back to the legacy {mid,right} order, then the
+// default.
 function widgetColumns() {
   const w = deviceStyle.widgets;
   if (w && Array.isArray(w.columns)) {
-    return w.columns
-      .map((c) => (Array.isArray(c) ? c.filter((id) => isKnownUnit(id)) : []))
-      .filter((c) => c.length);
+    return w.columns.map(normalizeColumn).filter((c) => c.length);
   }
   if (w && w.order && Array.isArray(w.order.mid) && Array.isArray(w.order.right)) {
-    return [["team"], ["tasks"], w.order.mid.slice(), w.order.right.slice()].filter((c) => c.length);
+    return [["team"], ["tasks"], w.order.mid.slice(), w.order.right.slice()]
+      .map(normalizeColumn)
+      .filter((c) => c.length);
   }
-  return DEFAULT_COLUMNS.map((c) => c.slice());
+  return DEFAULT_COLUMNS.map(normalizeColumn);
 }
 function saveWidgetColumns(cols, flex) {
-  const clean = cols.map((c) => c.slice()).filter((c) => c.length); // drop collapsed (empty) columns
-  const columns = clean.length ? clean : DEFAULT_COLUMNS.map((c) => c.slice());
+  // drop empty rows, then collapse any now-empty columns
+  const clean = cols
+    .map((c) => c.map((row) => row.slice()).filter((row) => row.length))
+    .filter((c) => c.length);
+  const columns = clean.length ? clean : DEFAULT_COLUMNS.map(normalizeColumn);
   // keep the per-column widths only while the column count is unchanged; adding
   // or collapsing a column resets the widths to equal.
   let colFlex = null;
@@ -6051,19 +6082,24 @@ function columnFlex(n) {
   return Array(n).fill(1);
 }
 function widgetPresent(id) {
-  return widgetColumns().some((col) => col.includes(id));
+  return widgetColumns().some((col) => col.some((row) => row.includes(id)));
 }
 function widgetEl(id) {
   return document.querySelector('.dt-widget[data-widget="' + id + '"]');
 }
-// Read the live column arrangement out of the DOM (used after a drag).
+// Read the live column arrangement out of the DOM (used after a drag). Each
+// column is a list of rows; each row a list of side-by-side widget ids.
 function columnsFromDOM() {
   const dash = document.getElementById("dt-dashboard");
   if (!dash) return widgetColumns();
+  const widgetIds = (parent) =>
+    [...parent.querySelectorAll(":scope > .dt-widget:not(.widget-off)")].map((w) => w.dataset.widget);
   return [...dash.querySelectorAll(":scope > .dt-col")]
-    .map((c) =>
-      [...c.querySelectorAll(":scope > .dt-widget:not(.widget-off)")].map((w) => w.dataset.widget)
-    )
+    .map((c) => {
+      const rows = [...c.querySelectorAll(":scope > .dt-row")];
+      const arr = rows.length ? rows.map(widgetIds) : [widgetIds(c)]; // tolerate row-less cols
+      return arr.filter((row) => row.length);
+    })
     .filter((c) => c.length);
 }
 
@@ -6164,7 +6200,7 @@ function addEmbed() {
   saveDeviceStyle();
   let cols = widgetColumns();
   if (!cols.length) cols = [[]];
-  cols[0] = [id, ...cols[0]];
+  cols[0] = [[id], ...cols[0]]; // a fresh full-width row at the top of column 1
   saveWidgetColumns(cols);
   widgetAccOpen.add(id);
   applyDashboard();
@@ -6173,8 +6209,8 @@ function addEmbed() {
 function removeEmbed(id) {
   delete embedStore()[id];
   if (deviceStyle.widgetStyles) delete deviceStyle.widgetStyles[id];
-  const cols = widgetColumns().map((c) => c.filter((x) => x !== id));
-  saveWidgetColumns(cols); // also persists the embed deletion above
+  const cols = widgetColumns().map((c) => c.map((row) => row.filter((x) => x !== id)));
+  saveWidgetColumns(cols); // also persists the embed deletion above (empties dropped on save)
   if (pageLayout().items && pageLayout().items[id]) {
     delete pageLayout().items[id];
     touchUiPrefs();
@@ -6198,7 +6234,7 @@ function applyDashboard() {
   if (!dash || !shed) return;
   syncEmbedElements(); // make/remove embed-frame elements to match the store
   const cols = widgetColumns();
-  const placed = new Set(cols.flat());
+  const placed = new Set(cols.flat(2));
   // toggle-able widgets are "off" when not placed in any column
   for (const id of WIDGET_IDS) {
     const el = widgetEl(id);
@@ -6212,14 +6248,25 @@ function applyDashboard() {
   // rebuild the column containers (elements are moved, not recreated)
   dash.querySelectorAll(":scope > .dt-col").forEach((c) => c.remove());
   const colEls = [];
-  for (const colIds of cols) {
-    const units = colIds
-      .map((id) => widgetEl(id))
-      .filter((el) => el && !el.classList.contains("widget-off"));
-    if (!units.length) continue; // collapse: an empty column isn't rendered
+  for (const colRows of cols) {
+    // resolve each row to its present (not toggled-off) widget elements
+    const rows = colRows
+      .map((rowIds) =>
+        rowIds
+          .map((id) => widgetEl(id))
+          .filter((el) => el && !el.classList.contains("widget-off"))
+      )
+      .filter((units) => units.length);
+    if (!rows.length) continue; // collapse: an empty column isn't rendered
     const colEl = document.createElement("div");
     colEl.className = "dt-col";
-    units.forEach((el) => colEl.appendChild(el));
+    for (const units of rows) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "dt-row";
+      if (units.length > 1) rowEl.classList.add("dt-row-split");
+      units.forEach((el) => rowEl.appendChild(el));
+      colEl.appendChild(rowEl);
+    }
     dash.insertBefore(colEl, shed);
     colEls.push(colEl);
   }
@@ -6814,10 +6861,10 @@ function makeEmbedUploadCtrl(id) {
 function toggleWidget(id) {
   let cols = widgetColumns();
   if (widgetPresent(id)) {
-    cols = cols.map((c) => c.filter((x) => x !== id)).filter((c) => c.length);
+    cols = cols.map((c) => c.map((row) => row.filter((x) => x !== id))); // save drops empties
   } else {
     if (!cols.length) cols = [[]];
-    cols[0] = [id, ...cols[0]]; // added widgets land in the top-leftmost spot
+    cols[0] = [[id], ...cols[0]]; // added widgets land in a new row at the top-left
   }
   saveWidgetColumns(cols);
   applyDashboard();
@@ -6834,9 +6881,14 @@ function initWidgetDrag() {
 // a drop creates a brand-new column (up to MAX_COLUMNS).
 const NEW_COL_EDGE = 44;
 
-// Where the widget would drop for a given cursor point. Either a slot inside an
-// existing column ({ colEl, index, kids }) or a new column at an edge
-// ({ newCol: "left" | "right" }).
+// Fraction of a widget's width on each side that reads as a "dock beside me"
+// (side-by-side) zone; the middle reads as a stack (new row) zone.
+const SPLIT_EDGE_FRAC = 0.32;
+
+// Where the widget would drop for a given cursor point. One of:
+//   { newCol: "left" | "right" }             — a brand-new column at the edge
+//   { colEl, rowIndex }                       — a new full-width row in a column
+//   { colEl, rowEl, splitIndex, sibs }        — side-by-side inside an existing row
 function computeWidgetDrop(x, y, dragEl) {
   const dash = document.getElementById("dt-dashboard");
   const cols = [...dash.querySelectorAll(":scope > .dt-col")];
@@ -6856,18 +6908,43 @@ function computeWidgetDrop(x, y, dragEl) {
     }
   }
   if (!colEl) return { newCol: "right" };
-  const kids = [...colEl.querySelectorAll(":scope > .dt-widget")].filter(
-    (w) => w !== dragEl && !w.classList.contains("widget-off")
-  );
-  let index = kids.length;
-  for (let i = 0; i < kids.length; i++) {
-    const r = kids[i].getBoundingClientRect();
-    if (y < r.top + r.height / 2) {
-      index = i;
+
+  const rows = [...colEl.querySelectorAll(":scope > .dt-row")];
+  if (!rows.length) return { colEl, rowIndex: 0 };
+
+  // find the row the cursor sits over (else it's above the first / below the last)
+  let hit = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (y < rows[i].getBoundingClientRect().bottom) {
+      hit = i;
       break;
     }
   }
-  return { colEl, index, kids };
+  if (hit === -1) return { colEl, rowIndex: rows.length }; // below every row
+  const rr = rows[hit].getBoundingClientRect();
+  if (y < rr.top) return { colEl, rowIndex: hit }; // in the gap above this row
+
+  // over a row: its side zones dock beside a widget, its middle stacks a new row
+  const sibs = [...rows[hit].querySelectorAll(":scope > .dt-widget")].filter(
+    (w) => w !== dragEl && !w.classList.contains("widget-off")
+  );
+  if (sibs.length && sibs.length < MAX_ROW_WIDGETS) {
+    // nearest sibling by x, then its left / right edge zone
+    let wi = sibs.length - 1;
+    for (let i = 0; i < sibs.length; i++) {
+      if (x < sibs[i].getBoundingClientRect().right) {
+        wi = i;
+        break;
+      }
+    }
+    const wr = sibs[wi].getBoundingClientRect();
+    const zone = wr.width * SPLIT_EDGE_FRAC;
+    if (x < wr.left + zone) return { colEl, rowEl: rows[hit], splitIndex: wi, sibs };
+    if (x > wr.right - zone) return { colEl, rowEl: rows[hit], splitIndex: wi + 1, sibs };
+  }
+  // stack: a new full-width row above or below the hovered one
+  const rowIndex = y < rr.top + rr.height / 2 ? hit : hit + 1;
+  return { colEl, rowIndex };
 }
 
 function startWidgetDrag(startEvent, widget) {
@@ -6878,19 +6955,26 @@ function startWidgetDrag(startEvent, widget) {
   ghost.className = "dt-widget-ghost";
   ghost.textContent = unitName(widget.dataset.widget);
   document.body.appendChild(ghost);
-  const drop = document.createElement("div");
+  const drop = document.createElement("div"); // horizontal line: a new full-width row
   drop.className = "dt-widget-drop";
+  const dropV = document.createElement("div"); // vertical line: dock beside a widget
+  dropV.className = "dt-widget-drop-v";
   const newBar = document.createElement("div");
   newBar.className = "dt-col-new-indicator";
   widget.classList.add("dragging");
-  let pending = null; // { newCol } or { colEl, index }
+  let pending = null; // { newCol } | { colEl, rowIndex } | { rowEl, splitIndex, sibs }
+
+  const clearIndicators = () => {
+    drop.remove();
+    dropV.remove();
+    newBar.remove();
+  };
 
   const place = (x, y) => {
     ghost.style.left = x + "px";
     ghost.style.top = y + "px";
     const t = computeWidgetDrop(x, y, widget);
-    drop.remove();
-    newBar.remove();
+    clearIndicators();
     pending = t;
     if (t.newCol) {
       const r = dash.getBoundingClientRect();
@@ -6899,10 +6983,15 @@ function startWidgetDrag(startEvent, widget) {
       newBar.style.left =
         (t.newCol === "left" ? r.left - 3 : r.right - 3) + window.scrollX + "px";
       document.body.appendChild(newBar);
-    } else if (t.index >= t.kids.length) {
-      t.colEl.appendChild(drop);
+    } else if (t.rowEl) {
+      // side-by-side: a vertical bar between the row's widgets
+      if (t.splitIndex >= t.sibs.length) t.rowEl.appendChild(dropV);
+      else t.rowEl.insertBefore(dropV, t.sibs[t.splitIndex]);
     } else {
-      t.colEl.insertBefore(drop, t.kids[t.index]);
+      // stack: a horizontal bar between the column's rows
+      const rows = [...t.colEl.querySelectorAll(":scope > .dt-row")];
+      if (t.rowIndex >= rows.length) t.colEl.appendChild(drop);
+      else t.colEl.insertBefore(drop, rows[t.rowIndex]);
     }
   };
   place(startEvent.clientX, startEvent.clientY);
@@ -6914,15 +7003,24 @@ function startWidgetDrag(startEvent, widget) {
       if (pending && pending.newCol) {
         const colEl = document.createElement("div");
         colEl.className = "dt-col";
-        colEl.appendChild(widget);
+        const rowEl = document.createElement("div");
+        rowEl.className = "dt-row";
+        rowEl.appendChild(widget);
+        colEl.appendChild(rowEl);
         const shed = document.getElementById("dt-widget-shed");
         if (pending.newCol === "left") dash.insertBefore(colEl, dash.querySelector(":scope > .dt-col"));
         else dash.insertBefore(colEl, shed);
+      } else if (dropV.parentElement) {
+        // dock beside the widget in that row
+        dropV.parentElement.insertBefore(widget, dropV);
       } else if (drop.parentElement) {
-        drop.parentElement.insertBefore(widget, drop);
+        // a new full-width row where the horizontal line sits
+        const rowEl = document.createElement("div");
+        rowEl.className = "dt-row";
+        rowEl.appendChild(widget);
+        drop.parentElement.insertBefore(rowEl, drop);
       }
-      drop.remove();
-      newBar.remove();
+      clearIndicators();
       ghost.remove();
       widget.classList.remove("dragging");
       saveWidgetColumns(columnsFromDOM());

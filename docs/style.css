@@ -1931,6 +1931,20 @@ body.theme-dark .dex-cell.undiscovered img {
     /* adjustable extra vertical space between stacked widgets (edit menu) */
     row-gap: var(--dt-widget-gap, 0px);
   }
+  /* one horizontal line within a column; usually a single widget, but two+ can
+     share it side by side (drag a widget onto another's left/right edge) */
+  .dt-row {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+  }
+  .dt-row > .dt-widget {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .dt-row-split {
+    gap: 16px; /* space between widgets sharing a row */
+  }
 
   /* generic empty labelled box */
   .dt-box {
@@ -3830,6 +3844,15 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 2px;
     background: var(--color-add);
     margin: 6px 0;
+    box-shadow: 0 0 0 1px var(--color-add);
+  }
+  /* vertical variant: shown between widgets when docking one beside another */
+  .dt-widget-drop-v {
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--color-add);
     box-shadow: 0 0 0 1px var(--color-add);
   }
   /* full-height highlight shown at the page edge: drop here to make a new column */
