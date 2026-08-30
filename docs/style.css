@@ -2174,6 +2174,8 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-tasks .add-row input {
     background: var(--pt-taskbar, var(--input-bg));
+    /* thin outline a shade darker than whatever fill color is selected */
+    border: 1px solid color-mix(in srgb, var(--pt-taskbar, var(--input-bg)) 85%, #000);
   }
   .dt-tasks.pt-taskbar-glass .add-row input {
     background: color-mix(in srgb, var(--pt-taskbar, #ffffff) var(--pt-taskbar-glass-op, 22%), transparent);
