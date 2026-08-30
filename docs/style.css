@@ -2695,7 +2695,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-cal-team-prog {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 400;
     padding: 2px 10px; /* tight vertically so the pill isn't taller than its text needs */
     line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
     border-radius: 999px;
@@ -2775,7 +2775,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .ci-prog {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 400;
     padding: 1px 8px; /* tight vertically so the pill isn't taller than its text needs */
     line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
     border-radius: 999px;
@@ -3910,7 +3910,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .sp-label {
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 400;
     color: #fff;
   }
   .sp-top-row {
