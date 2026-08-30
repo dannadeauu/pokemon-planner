@@ -1918,6 +1918,15 @@ body.theme-dark .dex-cell.undiscovered img {
     margin: 0 0 12px;
     color: var(--dt-heading, inherit); /* "headings" swatch (page-edit text tab) */
     font-family: var(--font-heading, inherit); /* "headings font" (text tab) */
+    outline: none;
+  }
+  /* section headings are editable in page-edit mode, same affordance as the
+     title: a text caret on hover and an underline on the one being edited */
+  .dt-root.dt-editing .dt-h2[contenteditable="true"] {
+    cursor: text;
+  }
+  .dt-h2:focus {
+    box-shadow: inset 0 -3px 0 var(--color-add);
   }
 
   /* ---- top dashboard: a flex row of auto-sized columns ----

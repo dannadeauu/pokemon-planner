@@ -62,7 +62,7 @@
 
       <div class="dt-widget dt-widget-tasks" data-widget="tasks">
         <div class="dt-widget-grip" title="drag widget"></div>
-        <h2 class="dt-h2">today's team</h2>
+        <h2 class="dt-h2" data-h2="tasks" spellcheck="false">today's team</h2>
         <div class="dt-tasks" id="dt-tasks-slot"></div>
       </div>
 
@@ -76,7 +76,7 @@
         </div>
         <div class="dt-widget" data-widget="habit">
           <div class="dt-widget-grip" title="drag widget"></div>
-          <h2 class="dt-h2">habit tracker</h2>
+          <h2 class="dt-h2" data-h2="habit" spellcheck="false">habit tracker</h2>
           <div class="dt-box dt-habit-box" id="dt-habit-box">
             <div class="habit-week" id="habit-week"></div>
             <div class="habit-month" id="habit-month"></div>
@@ -100,7 +100,7 @@
         </div>
         <div class="dt-widget" data-widget="pokepark">
           <div class="dt-widget-grip" title="drag widget"></div>
-          <h2 class="dt-h2">pokepark</h2>
+          <h2 class="dt-h2" data-h2="pokepark" spellcheck="false">pokepark</h2>
           <div class="dt-box dt-park-box" id="dt-park-slot"></div>
         </div>
         <div class="dt-widget widget-off" data-widget="spotify2">
@@ -119,7 +119,7 @@
     </div>
 
     <div class="dt-section dt-dex-section">
-      <h2 class="dt-h2">pokedex</h2>
+      <h2 class="dt-h2" data-h2="pokedex" spellcheck="false">pokedex</h2>
       <div id="dt-dex-slot"></div>
     </div>
   </div>
@@ -474,9 +474,10 @@
       <div class="dt-edit-text">
         <button class="dt-fmt" id="fmt-bold" type="button" title="bold"><b>B</b></button>
         <button class="dt-fmt" id="fmt-italic" type="button" title="italic"><i>I</i></button>
+        <button class="dt-fmt" id="fmt-underline" type="button" title="underline"><u>U</u></button>
         <label class="dt-fmt dt-fmt-color" title="text color"><span>A</span><input type="color" id="fmt-color" /></label>
       </div>
-      <div class="dt-edit-hint" id="dt-edit-hint">highlight any other text (title / habits) to format it</div>
+      <div class="dt-edit-hint" id="dt-edit-hint">highlight any editable text (title / headings / habits) to format it</div>
     </div>
     <div class="dt-edit-body hidden" data-epane="widgets">
       <div class="dt-edit-label">widgets on your page</div>

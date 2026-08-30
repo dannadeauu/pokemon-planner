@@ -3658,10 +3658,10 @@ const DESKTOP_MQ = window.matchMedia("(min-width: 1024px)");
 
 const UI_PREFS_KEY = "todo-app-ui-prefs";
 function loadUiPrefs() {
-  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50, bannerHidden: false, pageLayout: {} };
+  const defaults = { banner: "", title: "pokeplanner", spotify: "", bannerPos: 50, bannerHidden: false, pageLayout: {}, headings: {} };
   try {
     const s = JSON.parse(localStorage.getItem(UI_PREFS_KEY));
-    if (s && typeof s === "object") return { ...defaults, ...s, pageLayout: { ...(s.pageLayout || {}) } };
+    if (s && typeof s === "object") return { ...defaults, ...s, pageLayout: { ...(s.pageLayout || {}) }, headings: { ...(s.headings || {}) } };
   } catch (e) {
     // fall through to defaults
   }
@@ -3676,7 +3676,7 @@ function saveUiPrefs() {
 let uiSyncTimer = null;
 let lastSyncedUi = null;
 function uiSyncBody() {
-  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, bannerHidden: uiPrefs.bannerHidden, pageLayout: uiPrefs.pageLayout });
+  return JSON.stringify({ banner: uiPrefs.banner, title: uiPrefs.title, headings: uiPrefs.headings, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, bannerHidden: uiPrefs.bannerHidden, pageLayout: uiPrefs.pageLayout });
 }
 function touchUiPrefs() {
   uiPrefs.updatedAt = new Date().toISOString();
@@ -3694,7 +3694,7 @@ async function pushUi() {
     if (!authSession) return;
     await supabaseRpc(
       "push_ui",
-      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, bannerHidden: uiPrefs.bannerHidden, pageLayout: uiPrefs.pageLayout, updatedAt: uiPrefs.updatedAt } },
+      { p_data: { banner: uiPrefs.banner, title: uiPrefs.title, headings: uiPrefs.headings, spotify: uiPrefs.spotify, bannerPos: uiPrefs.bannerPos, bannerHidden: uiPrefs.bannerHidden, pageLayout: uiPrefs.pageLayout, updatedAt: uiPrefs.updatedAt } },
       authSession.access_token
     );
     lastSyncedUi = body;
@@ -3718,6 +3718,7 @@ async function pullUi() {
       const d = remote.data;
       if (typeof d.banner === "string") uiPrefs.banner = d.banner;
       if (typeof d.title === "string") uiPrefs.title = d.title;
+      if (d.headings && typeof d.headings === "object") uiPrefs.headings = { ...d.headings };
       if (typeof d.spotify === "string") uiPrefs.spotify = d.spotify;
       if (typeof d.bannerPos === "number") uiPrefs.bannerPos = d.bannerPos;
       if (typeof d.bannerHidden === "boolean") uiPrefs.bannerHidden = d.bannerHidden;
@@ -4529,6 +4530,82 @@ function renderTitle() {
   else title.textContent = plain;
 }
 
+// ---- editable section headings (the .dt-h2 above each dashboard section) ----
+// They work exactly like the page title: the plain text syncs across devices,
+// the rich (bold / italic / underline / color) markup stays on this device.
+function headingEls() {
+  return [...document.querySelectorAll("#dt-root .dt-h2[data-h2]")];
+}
+
+// The heading's original markup text, remembered the first time we touch it so
+// clearing a heading brings the built-in name back instead of leaving a gap.
+function headingDefault(el) {
+  if (el.dataset.h2Default == null) el.dataset.h2Default = (el.textContent || "").trim();
+  return el.dataset.h2Default;
+}
+
+function renderHeadings() {
+  const rich = (deviceStyle.richText && deviceStyle.richText.h2) || {};
+  for (const el of headingEls()) {
+    const fallback = headingDefault(el); // capture before we overwrite anything
+    if (document.activeElement === el) continue;
+    const key = el.dataset.h2;
+    const plain = (uiPrefs.headings && uiPrefs.headings[key]) || fallback;
+    const r = rich[key];
+    if (r && stripHtml(r).trim() === plain.trim()) el.innerHTML = r;
+    else el.textContent = plain;
+  }
+}
+
+function saveHeading(el) {
+  const key = el.dataset.h2;
+  if (!key) return;
+  uiPrefs.headings = uiPrefs.headings || {};
+  deviceStyle.richText = deviceStyle.richText || {};
+  deviceStyle.richText.h2 = deviceStyle.richText.h2 || {};
+  const plain = (el.textContent || "").trim();
+  if (!plain) {
+    // emptied out: drop the override and put the built-in heading back
+    delete deviceStyle.richText.h2[key];
+    saveDeviceStyle();
+    if (uiPrefs.headings[key] != null) {
+      delete uiPrefs.headings[key];
+      touchUiPrefs();
+    }
+    renderHeadings();
+    return;
+  }
+  // keep this device's formatting, sync the plain text as the shared base
+  deviceStyle.richText.h2[key] = el.innerHTML;
+  saveDeviceStyle();
+  if (uiPrefs.headings[key] !== plain) {
+    uiPrefs.headings[key] = plain;
+    touchUiPrefs();
+  }
+}
+
+function initHeadings() {
+  for (const el of headingEls()) {
+    headingDefault(el);
+    el.spellcheck = false;
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        el.blur();
+      }
+    });
+    // a heading is one line of text: paste as plain text so pasted markup can't
+    // drop block elements (or someone else's styling) into the dashboard
+    el.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const cb = e.clipboardData || window.clipboardData;
+      const text = (cb ? cb.getData("text/plain") : "").replace(/\s+/g, " ");
+      if (text) document.execCommand("insertText", false, text);
+    });
+    el.addEventListener("blur", () => saveHeading(el));
+  }
+}
+
 function applyUiPrefs() {
   const root = document.getElementById("dt-root");
   if (root) root.classList.toggle("dt-no-banner", Boolean(uiPrefs.bannerHidden));
@@ -4539,6 +4616,7 @@ function applyUiPrefs() {
     banner.style.backgroundPosition = `center ${uiPrefs.bannerPos != null ? uiPrefs.bannerPos : 50}%`;
   }
   renderTitle();
+  renderHeadings();
   renderSpotifyEmbed();
   applyPageLayout();
 }
@@ -5466,12 +5544,14 @@ function teardownPageHandles() {
   document.querySelectorAll(".dt-resizable").forEach((el) => el.classList.remove("dt-resizable"));
 }
 
-// The page title + habit labels are only editable in page edit mode (task text
-// editing is intentionally left alone). Banner controls are gated via CSS.
+// The page title, the section headings + habit labels are only editable in page
+// edit mode (task text editing is intentionally left alone). Banner controls are
+// gated via CSS.
 function applyEditability() {
   const on = Boolean(pageEditMode);
   const title = document.getElementById("dt-title");
   if (title) title.contentEditable = String(on);
+  headingEls().forEach((h) => (h.contentEditable = String(on)));
   document
     .querySelectorAll(".habit-check-label")
     .forEach((l) => (l.contentEditable = String(on)));
@@ -5730,15 +5810,16 @@ function initBannerAndBgControls() {
 
 // ==========================================================================
 // The draggable page-edit menu: per-device color swatches + rich-text
-// formatting (bold / italic / color) for whatever text is highlighted in the
-// editable title or habit labels. All of it saves to deviceStyle (local).
+// formatting (bold / italic / underline / color) for whatever text is
+// highlighted in the editable title, section headings or habit labels. All of it
+// saves to deviceStyle (local).
 // ==========================================================================
 let editFmtRange = null; // last non-empty selection inside an editable element
 
 function fmtEditableOf(node) {
   if (!node) return null;
   const el = node.nodeType === 1 ? node : node.parentElement;
-  return el ? el.closest(".dt-title, .habit-check-label") : null;
+  return el ? el.closest(".dt-title, .dt-h2[data-h2], .habit-check-label") : null;
 }
 
 // Remember which editable text is currently selected so the format buttons can
@@ -5757,9 +5838,11 @@ function updateFmtSelectionUI() {
   menu.classList.toggle("no-selection", !editFmtRange);
   const b = document.getElementById("fmt-bold");
   const it = document.getElementById("fmt-italic");
+  const u = document.getElementById("fmt-underline");
   try {
     if (b) b.classList.toggle("active", document.queryCommandState("bold"));
     if (it) it.classList.toggle("active", document.queryCommandState("italic"));
+    if (u) u.classList.toggle("active", document.queryCommandState("underline"));
   } catch (e) {
     // queryCommandState can throw with no selection; ignore
   }
@@ -5773,6 +5856,9 @@ function saveRichText(editable) {
     deviceStyle.richText.title = editable.innerHTML;
     uiPrefs.title = (editable.textContent || "").trim() || "pokeplanner";
     touchUiPrefs();
+  } else if (editable.classList.contains("dt-h2")) {
+    saveHeading(editable); // saves deviceStyle + the synced plain text itself
+    return;
   } else if (editable.classList.contains("habit-check-label")) {
     const labels = [...document.querySelectorAll(".habit-check-label")];
     const i = labels.indexOf(editable);
@@ -5883,14 +5969,16 @@ function initEditMenu() {
   // text formatting acts on the highlighted editable text
   const bold = document.getElementById("fmt-bold");
   const italic = document.getElementById("fmt-italic");
+  const underline = document.getElementById("fmt-underline");
   const color = document.getElementById("fmt-color");
   // keep the selection when pressing the buttons (don't let them steal focus)
-  [bold, italic].forEach((b) => {
+  [bold, italic, underline].forEach((b) => {
     if (!b) return;
     b.addEventListener("mousedown", (e) => e.preventDefault());
   });
   if (bold) bold.addEventListener("click", () => applyFmt(() => document.execCommand("bold")));
   if (italic) italic.addEventListener("click", () => applyFmt(() => document.execCommand("italic")));
+  if (underline) underline.addEventListener("click", () => applyFmt(() => document.execCommand("underline")));
   if (color) {
     color.addEventListener("input", () =>
       applyFmt(() => document.execCommand("foreColor", false, color.value))
@@ -8174,6 +8262,9 @@ function buildDesktop() {
     }
   });
 
+  // editable section headings ("today's team", "habit tracker", ...)
+  initHeadings();
+
   // editable spotify embed
   document.getElementById("dt-embed-edit").addEventListener("click", () => {
     const link = window.prompt("paste a spotify playlist / album / track link:", uiPrefs.spotify || "");
@@ -8195,7 +8286,7 @@ function buildDesktop() {
   renderDexGrid();
   renderCalTeamExtras();
   renderHabitTracker();
-  applyEditability(); // title/habit labels start locked unless edit mode is on
+  applyEditability(); // title/headings/habit labels start locked unless edit mode is on
   initSpotify();
   initEditMenu();
   applyDashboard(); // build columns + place / hide widget cards per saved layout
