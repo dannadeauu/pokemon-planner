@@ -17,6 +17,63 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <!-- Page-edit formatting bar. Fixed to the top of the viewport for the whole
+       of edit mode, so it stays reachable while scrolling down to a heading.
+       Everything on it acts on the current text selection inside the page title,
+       a widget heading or a habit label — so a single word can carry two fonts. -->
+  <div class="dt-fmt-bar hidden" id="dt-fmt-bar">
+    <div class="fb-group font-picker">
+      <button class="fb-font-btn" id="fb-font-btn" type="button" aria-haspopup="true">font</button>
+      <div class="font-menu fb-font-menu hidden" id="fb-font-menu"></div>
+    </div>
+
+    <div class="fb-group fb-size">
+      <button class="fb-step" id="fb-size-dec" type="button" aria-label="smaller">&minus;</button>
+      <input class="fb-size-val" id="fb-size-val" inputmode="decimal" aria-label="font size" />
+      <button class="fb-step" id="fb-size-inc" type="button" aria-label="bigger">+</button>
+    </div>
+
+    <div class="fb-sep"></div>
+
+    <label class="fb-btn fb-color" id="fb-color-btn" title="text color">
+      <span class="fb-color-a">A</span>
+      <i class="fb-color-bar"></i>
+      <input type="color" id="fb-color" />
+    </label>
+    <button class="fb-btn" id="fb-bold" type="button" title="bold"><b>B</b></button>
+    <button class="fb-btn" id="fb-italic" type="button" title="italic"><i>I</i></button>
+    <button class="fb-btn" id="fb-underline" type="button" title="underline"><u>U</u></button>
+    <button class="fb-btn" id="fb-strike" type="button" title="strikethrough"><s>S</s></button>
+
+    <div class="fb-sep"></div>
+
+    <div class="fb-group fb-track-wrap">
+      <button class="fb-btn" id="fb-track-btn" type="button" title="letter spacing &amp; weight">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 5h12M12 5v10" />
+          <path d="M3 20h18M5.5 17.5 3 20l2.5 2.5M18.5 17.5 21 20l-2.5 2.5" />
+        </svg>
+      </button>
+      <div class="fb-pop hidden" id="fb-track-pop">
+        <label class="fb-pop-row">
+          <span>letter spacing</span>
+          <b id="fb-track-val">0</b>
+          <input type="range" id="fb-track" min="-10" max="60" step="1" />
+        </label>
+        <label class="fb-pop-row">
+          <span>text weight</span>
+          <b id="fb-weight-val">400</b>
+          <input type="range" id="fb-weight" min="100" max="900" step="100" />
+        </label>
+        <button class="fb-pop-reset" id="fb-track-reset" type="button">reset both</button>
+      </div>
+    </div>
+
+    <span class="fb-hint" id="fb-hint">highlight text in the page title or a widget heading</span>
+    <button class="fb-done" id="fb-done" type="button">done</button>
+  </div>
+
   <!-- Desktop dashboard. Hidden below 1024px; on desktop it is shown and the
        live team / task / poképark / pokédex nodes are relocated into its slots
        by JS, so all existing rendering keeps working. Mobile is untouched. -->

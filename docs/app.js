@@ -472,6 +472,12 @@ const APP_FONTS = [
   { label: "Notion Default", stack: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", google: "Inter:wght@400;500;600;700;800" },
   { label: "Notion Serif", stack: "'Lyon Text', 'Source Serif 4', Georgia, ui-serif, serif", google: "Source+Serif+4:wght@400;500;600;700" },
   { label: "Notion Mono", stack: "'iA Writer Mono', 'Nitti', 'IBM Plex Mono', Menlo, Consolas, monospace", google: "IBM+Plex+Mono:wght@400;500;600;700" },
+  // Canva's Blosta Script. Canva licenses its font library for use inside Canva
+  // and doesn't publish the files, so there's nothing we can legally embed --
+  // same situation as Lyon Text above. The real face is named first and renders
+  // for anyone who has it installed locally; everyone else gets Dancing Script,
+  // the closest free signature script on Google Fonts.
+  { label: "Blosta Script", stack: "'Blosta Script', 'Blosta', 'Dancing Script', cursive", google: "Dancing+Script:wght@400;500;600;700" },
 ];
 
 function appFontByLabel(label) {
@@ -5573,6 +5579,15 @@ function setPageEdit(on) {
   root.classList.toggle("dt-editing", on);
   const menu = document.getElementById("dt-edit-menu");
   if (menu) menu.classList.toggle("hidden", !on);
+  // the fixed formatting bar rides along with edit mode; the body padding keeps
+  // the page from starting underneath it
+  const fmtBar = document.getElementById("dt-fmt-bar");
+  if (fmtBar) {
+    fmtBar.classList.toggle("hidden", !on);
+    document.body.classList.toggle("dt-fmt-open", on);
+    if (on) measureFmtBar();
+    else document.documentElement.style.removeProperty("--fmt-bar-h");
+  }
   applyEditability();
   teardownPageHandles();
   if (on) {
@@ -5860,13 +5875,27 @@ function baseWeight(editable) {
   return w && w >= BOLD_MIN ? w : 700;
 }
 
+// The style properties the format bar owns. A span carrying only these is one we
+// wrote ourselves, so it's safe to retune or unwrap without losing formatting
+// that came from somewhere else (execCommand's <b>/<i>/<font>, pasted markup…).
+const FMT_PROPS = ["font-weight", "font-family", "font-size", "letter-spacing"];
+
+function isFmtSpan(el) {
+  if (!el || el.tagName !== "SPAN" || !el.style.length) return false;
+  if ([...el.attributes].some((a) => a.name !== "style")) return false;
+  return [...el.style].every((p) => FMT_PROPS.includes(p));
+}
+
 // A span we added ourselves: it carries a font-weight and nothing else, so it's
 // safe to retune or unwrap without losing any other formatting.
 function isWeightSpan(el) {
   return Boolean(el && el.tagName === "SPAN" && el.style.fontWeight && el.style.length === 1);
 }
 
-// Every non-blank text node the range touches.
+// Every non-blank text node the range actually covers characters of.
+// Range.intersectsNode() is too loose here: it also reports a node the range
+// merely *touches* at a boundary, so selecting one run made the run next to it
+// count as selected too - and a two-font word then read back as "mixed".
 function rangeTextNodes(range) {
   const root = range.commonAncestorContainer;
   if (root.nodeType === 3) return [root];
@@ -5874,7 +5903,14 @@ function rangeTextNodes(range) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n;
   while ((n = walker.nextNode())) {
-    if (range.intersectsNode(n) && n.textContent.trim()) nodes.push(n);
+    if (!n.textContent.trim()) continue;
+    const nr = document.createRange();
+    nr.selectNodeContents(n);
+    // strict overlap: the node starts before the range ends *and* ends after the
+    // range starts, so a shared edge alone doesn't count
+    const startsBeforeEnd = nr.compareBoundaryPoints(Range.END_TO_START, range) < 0;
+    const endsAfterStart = nr.compareBoundaryPoints(Range.START_TO_END, range) > 0;
+    if (startsBeforeEnd && endsAfterStart) nodes.push(n);
   }
   return nodes;
 }
@@ -5895,10 +5931,10 @@ function rangeIsBold(range) {
 // text is left outside the range - comparing boundary points directly doesn't
 // work here, since (span, 0) and (its text node, 0) are the same position but
 // don't compare equal.
-function weightSpanExactlyCovering(range) {
+function fmtSpanExactlyCovering(range) {
   const node = range.commonAncestorContainer;
   const el = node.nodeType === 1 ? node : node.parentElement;
-  if (!isWeightSpan(el)) return null;
+  if (!isFmtSpan(el)) return null;
   const before = document.createRange();
   before.selectNodeContents(el);
   before.setEnd(range.startContainer, range.startOffset);
@@ -5908,31 +5944,63 @@ function weightSpanExactlyCovering(range) {
   return before.toString() === "" && after.toString() === "" ? el : null;
 }
 
-function setRangeWeight(range, weight) {
-  const host = weightSpanExactlyCovering(range);
+// Apply one or more of FMT_PROPS to exactly the selected characters. This is
+// what lets two fonts live inside one word: the range is lifted out, any older
+// value of the same property is stripped from inside it, and the whole thing
+// goes back wrapped in a single span. A "" value clears the property instead.
+// props keys are camelCase (fontFamily), matching element.style.
+function setRangeStyle(range, props) {
+  const entries = Object.entries(props);
+  const host = fmtSpanExactlyCovering(range);
   if (host) {
-    host.style.fontWeight = weight;
+    // the range already is one of our spans — retune it rather than nest another
+    for (const [prop, val] of entries) host.style[prop] = val;
     return;
   }
   const frag = range.extractContents();
-  // clear any weight already baked into the selection so the new one wins
-  frag.querySelectorAll("[style*='font-weight']").forEach((el) => (el.style.fontWeight = "")); // tidyWeightSpans sweeps up any span this empties out
-  frag.querySelectorAll("b, strong").forEach((el) => el.replaceWith(...el.childNodes));
+  for (const [prop, val] of entries) {
+    const dashed = prop.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+    // clear the property wherever it's already baked in, so the new value wins
+    frag.querySelectorAll(`[style*='${dashed}']`).forEach((el) => (el.style[prop] = "")); // tidyFormatting sweeps up any span this empties out
+    if (prop === "fontWeight") {
+      frag.querySelectorAll("b, strong").forEach((el) => el.replaceWith(...el.childNodes));
+    }
+    if (prop === "fontFamily") {
+      frag.querySelectorAll("font[face]").forEach((el) => el.removeAttribute("face"));
+    }
+    if (prop === "fontSize") {
+      frag.querySelectorAll("font[size]").forEach((el) => el.removeAttribute("size"));
+    }
+  }
   const span = document.createElement("span");
-  span.style.fontWeight = weight;
+  for (const [prop, val] of entries) span.style[prop] = val;
   span.appendChild(frag);
   range.insertNode(span);
 }
 
+function setRangeWeight(range, weight) {
+  setRangeStyle(range, { fontWeight: weight });
+}
+
 // Without this, toggling would leave a nested span per press. Drop the markup
 // that no longer does anything: wrappers left holding no text at all, a span
-// whose only child overrides it, and any span restating the weight it would
-// have inherited anyway.
+// whose only child overrides every property it sets, and any span restating
+// values it would have inherited anyway.
 function tidyFormatting(editable) {
+  // Does the span's declared value for `prop` already match what it would
+  // inherit? Compared as computed values, so "bold" == 700 and a font stack
+  // resolves the same way the browser resolves it.
+  const redundant = (span, prop) => {
+    const parent = span.parentElement;
+    if (!parent) return false;
+    const mine = getComputedStyle(span)[prop];
+    const theirs = getComputedStyle(parent)[prop];
+    return mine === theirs;
+  };
   for (let pass = 0; pass < 4; pass++) {
     let changed = false;
     // re-wrapping part of a formatted run strands empty wrappers behind it
-    for (const el of [...editable.querySelectorAll("span, b, strong, i, em, u, font")]) {
+    for (const el of [...editable.querySelectorAll("span, b, strong, i, em, u, s, strike, font")]) {
       if (el.isConnected && !el.textContent) {
         el.remove();
         changed = true;
@@ -5946,14 +6014,27 @@ function tidyFormatting(editable) {
         changed = true;
         continue;
       }
-      if (!isWeightSpan(span)) continue;
-      if (span.childNodes.length === 1 && isWeightSpan(span.firstElementChild)) {
-        span.replaceWith(span.firstElementChild);
+      if (!isFmtSpan(span)) continue;
+      // an inner span of ours that redeclares everything the outer one sets
+      const child = span.firstElementChild;
+      if (
+        span.childNodes.length === 1 &&
+        isFmtSpan(child) &&
+        [...span.style].every((p) => child.style.getPropertyValue(p))
+      ) {
+        span.replaceWith(child);
         changed = true;
         continue;
       }
-      const parent = span.parentElement;
-      if (parent && weightOf(span.style.fontWeight) === weightOf(getComputedStyle(parent).fontWeight)) {
+      // drop only the properties that are already inherited; keep the rest
+      for (const prop of [...span.style]) {
+        const camel = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        if (redundant(span, camel)) {
+          span.style.removeProperty(prop);
+          changed = true;
+        }
+      }
+      if (span.style.length === 0) {
         span.replaceWith(...span.childNodes);
         changed = true;
       }
@@ -5979,23 +6060,35 @@ function rangeFromOffsets(editable, off) {
   const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT);
   let pos = 0;
   let started = false;
+  let last = null;
   let n;
   while ((n = walker.nextNode())) {
     const next = pos + n.length;
-    if (!started && off.start <= next) {
+    // Strict `<` on the start: when the boundary falls exactly between two text
+    // nodes, anchor it to the head of the next node instead of the tail of the
+    // previous one. Anchoring to the tail left the range touching the run before
+    // it, so re-formatting the same stretch wrapped a new span around both.
+    if (!started && off.start < next) {
       range.setStart(n, off.start - pos);
       started = true;
     }
     if (started && off.end <= next) {
       range.setEnd(n, off.end - pos);
-      break;
+      return range;
     }
     pos = next;
+    last = n;
   }
+  // offsets past the end of the text (text was deleted under us): clamp
+  if (!started) range.collapse(false);
+  else if (last) range.setEnd(last, last.length);
   return range;
 }
 
-function toggleBold() {
+// The shared shape of every style edit: re-select the remembered range, mutate
+// it, tidy up, then put the same characters back under the highlight so the
+// controls keep acting on the text the user is looking at.
+function withSelection(mutate) {
   if (!editFmtRange) return;
   const { range, editable } = editFmtRange;
   editable.focus();
@@ -6004,9 +6097,8 @@ function toggleBold() {
   sel.addRange(range);
   const live = sel.getRangeAt(0);
   const off = textOffsets(editable, live);
-  setRangeWeight(live, rangeIsBold(live) ? "normal" : String(baseWeight(editable)));
+  mutate(live, editable);
   tidyFormatting(editable);
-  // keep the same text highlighted so it can be toggled straight back
   const restored = rangeFromOffsets(editable, off);
   sel.removeAllRanges();
   sel.addRange(restored);
@@ -6015,22 +6107,114 @@ function toggleBold() {
   updateFmtSelectionUI();
 }
 
+function toggleBold() {
+  withSelection((live, editable) =>
+    setRangeWeight(live, rangeIsBold(live) ? "normal" : String(baseWeight(editable)))
+  );
+}
+
+// Set FMT_PROPS on the selection (camelCase keys; "" clears a property).
+function applyFmtStyle(props) {
+  withSelection((live) => setRangeStyle(live, props));
+}
+
+// What the selection currently computes to for `prop`. Returns null when the
+// selection is mixed, so the readouts can show a blank rather than lie about it.
+function selectionComputed(prop) {
+  if (!editFmtRange) return null;
+  const nodes = rangeTextNodes(editFmtRange.range);
+  if (!nodes.length) return null;
+  let seen = null;
+  for (const n of nodes) {
+    const el = n.parentElement;
+    if (!el) continue;
+    const v = getComputedStyle(el)[prop];
+    if (seen === null) seen = v;
+    else if (seen !== v) return null;
+  }
+  return seen;
+}
+
+// Match a computed font-family string back to one of APP_FONTS by its first
+// family name, so the bar can show which font the selection is actually in.
+function fontLabelFromComputed(ff) {
+  if (!ff) return null;
+  const first = (s) => s.split(",")[0].trim().replace(/^["']|["']$/g, "").toLowerCase();
+  const want = first(ff);
+  const hit = APP_FONTS.find((f) => first(f.stack) === want);
+  return hit ? hit.label : null;
+}
+
 function updateFmtSelectionUI() {
+  const has = Boolean(editFmtRange);
   const menu = document.getElementById("dt-edit-menu");
-  if (!menu) return;
-  menu.classList.toggle("no-selection", !editFmtRange);
-  const b = document.getElementById("fmt-bold");
-  const it = document.getElementById("fmt-italic");
-  const u = document.getElementById("fmt-underline");
+  if (menu) menu.classList.toggle("no-selection", !has);
+  const bar = document.getElementById("dt-fmt-bar");
+  if (bar) bar.classList.toggle("no-selection", !has);
+
   // bold reads the selection's real weight (see toggleBold); italic / underline
-  // aren't on by default, so execCommand's own state is right for those
-  if (b) b.classList.toggle("active", Boolean(editFmtRange) && rangeIsBold(editFmtRange.range));
+  // / strikethrough aren't on by default, so execCommand's own state fits those
+  const boldOn = has && rangeIsBold(editFmtRange.range);
+  let italicOn = false;
+  let underlineOn = false;
+  let strikeOn = false;
   try {
-    if (it) it.classList.toggle("active", document.queryCommandState("italic"));
-    if (u) u.classList.toggle("active", document.queryCommandState("underline"));
+    italicOn = document.queryCommandState("italic");
+    underlineOn = document.queryCommandState("underline");
+    strikeOn = document.queryCommandState("strikeThrough");
   } catch (e) {
     // queryCommandState can throw with no selection; ignore
   }
+  const mark = (id, on) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("active", Boolean(on));
+  };
+  mark("fmt-bold", boldOn);
+  mark("fmt-italic", italicOn);
+  mark("fmt-underline", underlineOn);
+  mark("fb-bold", boldOn);
+  mark("fb-italic", italicOn);
+  mark("fb-underline", underlineOn);
+  mark("fb-strike", strikeOn);
+
+  if (!bar) return;
+  // readouts: font name, size in px, letter spacing in hundredths of an em,
+  // weight. A mixed selection shows a dash / falls back to a neutral slider spot.
+  const fontBtn = document.getElementById("fb-font-btn");
+  if (fontBtn) {
+    const ff = has ? selectionComputed("fontFamily") : null;
+    const label = fontLabelFromComputed(ff);
+    fontBtn.textContent = has ? label || (ff ? "mixed" : "font") : "font";
+    fontBtn.style.fontFamily = label ? appFontByLabel(label).stack : "inherit";
+  }
+  const sizeVal = document.getElementById("fb-size-val");
+  if (sizeVal && document.activeElement !== sizeVal) {
+    const px = has ? parseFloat(selectionComputed("fontSize")) : NaN;
+    sizeVal.value = Number.isFinite(px) ? String(Math.round(px * 10) / 10) : "";
+  }
+  const track = document.getElementById("fb-track");
+  const trackVal = document.getElementById("fb-track-val");
+  if (track && trackVal) {
+    const ls = has ? selectionComputed("letterSpacing") : null;
+    const px = parseFloat(ls); // "normal" parses to NaN, i.e. no extra spacing
+    const em = has ? emHundredths(Number.isFinite(px) ? px : 0, selectionComputed("fontSize")) : 0;
+    track.value = String(em);
+    trackVal.textContent = String(em);
+  }
+  const weight = document.getElementById("fb-weight");
+  const weightVal = document.getElementById("fb-weight-val");
+  if (weight && weightVal) {
+    const w = has ? weightOf(selectionComputed("fontWeight")) : null;
+    weight.value = String(w || 400);
+    weightVal.textContent = w ? String(w) : "—";
+  }
+}
+
+// Letter spacing is stored in em so it survives the text-size slider, but a
+// slider in em fractions is unreadable — so the UI works in hundredths of an em.
+function emHundredths(px, fontSizeStr) {
+  const base = parseFloat(fontSizeStr) || 16;
+  return Math.round((px / base) * 100);
 }
 
 // Persist the editable's formatted HTML per-device (keeping the synced plain
@@ -6072,6 +6256,182 @@ function applyFmt(fn) {
     editFmtRange = { range: s.getRangeAt(0).cloneRange(), editable };
   }
   updateFmtSelectionUI();
+}
+
+// ---- the fixed top formatting bar (page-edit mode) ----
+// Font family / size / color / B I U S / letter spacing + weight, all acting on
+// the highlighted characters rather than the whole element — so one word can mix
+// two fonts. Sizes are absolute px (an explicit size stops following the global
+// text-size slider, which is the point of setting one); letter spacing is stored
+// in em so it stays proportional to whatever size the text ends up at.
+const FMT_SIZE_MIN = 6;
+const FMT_SIZE_MAX = 200;
+
+function fmtBarSelectionPx() {
+  const px = parseFloat(selectionComputed("fontSize"));
+  return Number.isFinite(px) ? px : null;
+}
+
+function applyFmtSize(px) {
+  const clamped = Math.min(FMT_SIZE_MAX, Math.max(FMT_SIZE_MIN, px));
+  applyFmtStyle({ fontSize: Math.round(clamped * 10) / 10 + "px" });
+}
+
+// Keep the page clear of the fixed bar: reserve exactly the height it renders
+// at, which changes when the controls wrap onto a second row.
+function measureFmtBar() {
+  const bar = document.getElementById("dt-fmt-bar");
+  if (!bar || bar.classList.contains("hidden")) return;
+  document.documentElement.style.setProperty("--fmt-bar-h", bar.offsetHeight + "px");
+}
+
+function initFmtBar() {
+  const bar = document.getElementById("dt-fmt-bar");
+  if (!bar) return;
+
+  // Pressing anything on the bar must not blur the text being formatted, or the
+  // highlight disappears before the handler runs. Real inputs are exempt — they
+  // need the default press behaviour to drag / open.
+  bar.addEventListener("mousedown", (e) => {
+    if (!e.target.closest("input")) e.preventDefault();
+  });
+
+  const fontBtn = document.getElementById("fb-font-btn");
+  const fontMenu = document.getElementById("fb-font-menu");
+  const trackBtn = document.getElementById("fb-track-btn");
+  const trackPop = document.getElementById("fb-track-pop");
+
+  // font family, with a "default" entry that clears the per-selection override
+  if (fontBtn && fontMenu) {
+    const buildMenu = () => {
+      fontMenu.innerHTML = "";
+      const current = fontLabelFromComputed(selectionComputed("fontFamily"));
+      const addOption = (label, stack, onPick) => {
+        const opt = document.createElement("button");
+        opt.type = "button";
+        opt.className = "font-option" + (label === current ? " active" : "");
+        opt.textContent = label;
+        if (stack) opt.style.fontFamily = stack;
+        opt.addEventListener("click", () => {
+          onPick();
+          fontMenu.classList.add("hidden");
+        });
+        fontMenu.appendChild(opt);
+      };
+      addOption("default", null, () => applyFmtStyle({ fontFamily: "" }));
+      for (const f of APP_FONTS) {
+        ensureFontLoaded(f); // so the option renders in its real face
+        addOption(f.label, f.stack, () => {
+          ensureFontLoaded(f);
+          applyFmtStyle({ fontFamily: f.stack });
+        });
+      }
+    };
+    fontBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opening = fontMenu.classList.contains("hidden");
+      if (opening) buildMenu();
+      fontMenu.classList.toggle("hidden", !opening);
+      if (trackPop) trackPop.classList.add("hidden");
+    });
+  }
+
+  // size stepper
+  const sizeVal = document.getElementById("fb-size-val");
+  const step = (delta) => {
+    const px = fmtBarSelectionPx();
+    if (px == null) return;
+    applyFmtSize(px + delta);
+  };
+  const dec = document.getElementById("fb-size-dec");
+  const inc = document.getElementById("fb-size-inc");
+  if (dec) dec.addEventListener("click", () => step(-1));
+  if (inc) inc.addEventListener("click", () => step(1));
+  if (sizeVal) {
+    const commit = () => {
+      const n = parseFloat(sizeVal.value);
+      if (Number.isFinite(n)) applyFmtSize(n);
+      else updateFmtSelectionUI(); // put the real value back
+    };
+    sizeVal.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        step(e.key === "ArrowUp" ? 1 : -1);
+      }
+    });
+    sizeVal.addEventListener("blur", commit);
+  }
+
+  // B / I / U / S + color
+  const bold = document.getElementById("fb-bold");
+  const italic = document.getElementById("fb-italic");
+  const underline = document.getElementById("fb-underline");
+  const strike = document.getElementById("fb-strike");
+  const color = document.getElementById("fb-color");
+  if (bold) bold.addEventListener("click", toggleBold);
+  if (italic) italic.addEventListener("click", () => applyFmt(() => document.execCommand("italic")));
+  if (underline) {
+    underline.addEventListener("click", () => applyFmt(() => document.execCommand("underline")));
+  }
+  if (strike) {
+    strike.addEventListener("click", () => applyFmt(() => document.execCommand("strikeThrough")));
+  }
+  if (color) {
+    color.addEventListener("input", () =>
+      applyFmt(() => document.execCommand("foreColor", false, color.value))
+    );
+  }
+
+  // letter spacing + weight popover
+  if (trackBtn && trackPop) {
+    trackBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      trackPop.classList.toggle("hidden");
+      if (fontMenu) fontMenu.classList.add("hidden");
+    });
+    trackPop.addEventListener("click", (e) => e.stopPropagation());
+  }
+  const track = document.getElementById("fb-track");
+  const trackVal = document.getElementById("fb-track-val");
+  if (track) {
+    track.addEventListener("input", () => {
+      if (trackVal) trackVal.textContent = track.value;
+      const em = Number(track.value) / 100;
+      applyFmtStyle({ letterSpacing: em ? em + "em" : "normal" });
+    });
+  }
+  const weight = document.getElementById("fb-weight");
+  const weightVal = document.getElementById("fb-weight-val");
+  if (weight) {
+    weight.addEventListener("input", () => {
+      if (weightVal) weightVal.textContent = weight.value;
+      applyFmtStyle({ fontWeight: weight.value });
+    });
+  }
+  const trackReset = document.getElementById("fb-track-reset");
+  if (trackReset) {
+    trackReset.addEventListener("click", () =>
+      applyFmtStyle({ letterSpacing: "", fontWeight: "" })
+    );
+  }
+
+  const done = document.getElementById("fb-done");
+  if (done) done.addEventListener("click", () => setPageEdit(false));
+
+  // close the dropdowns on any outside press
+  document.addEventListener("click", (e) => {
+    if (fontMenu && !fontMenu.classList.contains("hidden") && !e.target.closest(".fb-group")) {
+      fontMenu.classList.add("hidden");
+    }
+    if (trackPop && !trackPop.classList.contains("hidden") && !e.target.closest(".fb-track-wrap")) {
+      trackPop.classList.add("hidden");
+    }
+  });
+
+  window.addEventListener("resize", measureFmtBar);
 }
 
 function initEditMenu() {
@@ -8529,6 +8889,7 @@ function buildDesktop() {
   applyEditability(); // title/headings/habit labels start locked unless edit mode is on
   initSpotify();
   initEditMenu();
+  initFmtBar();
   applyDashboard(); // build columns + place / hide widget cards per saved layout
   window.addEventListener("resize", repositionColHandles); // keep divider handles aligned
   // keep the page-margin handles pinned to the content as it resizes / scrolls

@@ -3319,6 +3319,242 @@ body.theme-dark .dex-cell.undiscovered img {
     opacity: 0.85;
   }
 
+  /* ---- page-edit formatting bar (fixed to the top of the viewport) ----
+     Stays put while the page scrolls, so a heading further down can be selected
+     and formatted without losing the controls. The page is pushed down by the
+     bar's measured height (--fmt-bar-h, set in JS) rather than sitting under it,
+     so the top of the banner stays visible while editing. */
+  .dt-fmt-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 9px 14px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.13);
+    font-size: var(--app-text);
+    color: var(--text);
+    user-select: none;
+  }
+  .dt-fmt-bar.hidden {
+    display: none;
+  }
+  body.dt-fmt-open {
+    padding-top: var(--fmt-bar-h, 56px);
+  }
+
+  /* Nothing on the bar acts without a selection, so dim the controls until one
+     exists — the hint next to them explains what to do. */
+  .dt-fmt-bar.no-selection .fb-group,
+  .dt-fmt-bar.no-selection .fb-btn {
+    opacity: 0.38;
+    pointer-events: none;
+  }
+  .dt-fmt-bar:not(.no-selection) .fb-hint {
+    display: none;
+  }
+  .fb-hint {
+    flex: 1;
+    min-width: 120px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .fb-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .fb-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 2px 3px;
+    background: var(--border);
+  }
+
+  /* font family — reuses the existing .font-menu dropdown from the text tab */
+  .fb-font-btn {
+    height: 34px;
+    min-width: 148px;
+    max-width: 220px;
+    padding: 0 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: var(--app-text);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fb-font-menu {
+    top: calc(100% + 6px);
+    left: 0;
+    right: auto; /* .font-menu stretches to its picker; here it sizes to content */
+    min-width: 210px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  /* size stepper: − [value] + */
+  .fb-size {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    height: 34px;
+    overflow: hidden;
+  }
+  .fb-step {
+    width: 30px;
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: calc(var(--app-text) + 3px);
+    line-height: 1;
+    cursor: pointer;
+  }
+  .fb-step:active {
+    background: var(--team-card);
+  }
+  .fb-size-val {
+    width: 46px;
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: var(--app-text);
+    font-weight: 600;
+    text-align: center;
+    padding: 0;
+  }
+  .fb-size-val:focus {
+    outline: none;
+  }
+
+  .fb-btn {
+    flex: none;
+    width: 36px;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: var(--app-text);
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .fb-btn.active {
+    background: var(--color-add);
+    border-color: var(--color-add);
+    color: #fff;
+  }
+
+  /* the "A" swatch: a rainbow bar under the letter, the whole tile is the picker */
+  .fb-color {
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+  }
+  .fb-color-a {
+    font-weight: 700;
+    line-height: 1;
+  }
+  .fb-color-bar {
+    width: 17px;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #e5484d, #f5a524, #46a758, #3b82f6, #8e4ec6);
+  }
+  .fb-color input[type="color"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    padding: 0;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* letter spacing + weight live in a popover under the T↔ button */
+  .fb-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 10;
+    width: 232px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+  }
+  .fb-pop.hidden {
+    display: none;
+  }
+  .fb-pop-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+    font-size: var(--app-text);
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .fb-pop-row b {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .fb-pop-row input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    accent-color: var(--color-add);
+  }
+  .fb-pop-reset {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: var(--app-text);
+    font-weight: 600;
+    padding: 7px 0;
+    cursor: pointer;
+  }
+
+  .fb-done {
+    flex: none;
+    margin-left: auto;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 9px;
+    background: var(--color-add);
+    color: #fff;
+    font-family: inherit;
+    font-size: var(--app-text);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  /* "done" stays live even with nothing selected */
+  .dt-fmt-bar.no-selection .fb-done {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   /* ---- draggable page-edit menu (bottom right) ---- */
   .dt-edit-menu {
     position: fixed;
