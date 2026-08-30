@@ -12,9 +12,6 @@
   --color-not-started: #d9dade;
   --color-in-progress: #c9a876;
   --color-done: #6f8f52;
-  /* Tied to --color-not-started's default light background, not the page
-     theme, so it stays legible even if the page is switched to dark mode. */
-  --not-started-text: #55565c;
 
   /* Every piece of body text in the app resolves its size through this, so the
      "text size" slider (text tab) scales the whole page from one place. The two
@@ -314,31 +311,59 @@ h1 {
   outline: none;
 }
 
+/* ---- progress chips ----
+   One look for every status pill in the app: a solid dot in the selected status
+   color, sitting on a light tint of that same color, with text darkened from it.
+   Each chip only sets --chip-dot; the fill and ink are derived from it, so the
+   three swatches in settings still drive the whole chip. */
+.status-select,
+.dt-cal-team-prog,
+.ci-prog {
+  --chip-fill: color-mix(in srgb, var(--chip-dot) 25%, #fff);
+  --chip-ink: color-mix(in srgb, var(--chip-dot) 60%, #000);
+}
+/* On a dark page the tint has to go the other way — toward the card, not white. */
+body.theme-dark .status-select,
+body.theme-dark .dt-cal-team-prog,
+body.theme-dark .ci-prog {
+  --chip-fill: color-mix(in srgb, var(--chip-dot) 30%, var(--card));
+  --chip-ink: color-mix(in srgb, var(--chip-dot) 72%, #fff);
+}
+
 .status-select {
   font-family: inherit;
   font-size: var(--app-text);
   font-weight: 600;
-  padding: 5px 14px;
+  padding: 5px 14px 5px 1.85em; /* left inset in em so it tracks the dot below */
   border-radius: 999px; /* fully round — clamps to half the height at any pill size */
   border: none;
-  color: white;
   appearance: none;
   -webkit-appearance: none;
-  text-align: center;
-  text-align-last: center;
-}
-
-.status-select[data-status="not started"] {
-  background: var(--color-not-started);
-  color: var(--not-started-text);
+  text-align: left;
+  text-align-last: left;
+  --chip-dot: var(--color-not-started);
+  background-color: var(--chip-fill);
+  /* A <select> is a replaced element, so ::before never renders inside it — the
+     dot has to be painted as a background instead. Sized in em so it grows with
+     the text-size slider; the soft 0.25→0.29em stop keeps the edge from aliasing. */
+  background-image: radial-gradient(circle at 1em 50%, var(--chip-dot) 0 0.25em, transparent 0.29em);
+  background-repeat: no-repeat;
+  color: var(--chip-ink);
 }
 
 .status-select[data-status="in progress"] {
-  background: var(--color-in-progress);
+  --chip-dot: var(--color-in-progress);
 }
 
 .status-select[data-status="done!"] {
-  background: var(--color-done);
+  --chip-dot: var(--color-done);
+}
+
+/* The open dropdown is a plain list, not a chip — keep it on normal page colors
+   instead of inheriting the tinted fill/ink. */
+.status-select option {
+  background: var(--card);
+  color: var(--text);
 }
 
 .sprite {
@@ -2714,22 +2739,32 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1;
   }
   .dt-cal-team-prog {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55em;
     font-size: var(--app-text);
     font-weight: 500;
     padding: 2px 10px; /* tight vertically so the pill isn't taller than its text needs */
     line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
     border-radius: 999px;
-    background: var(--input-bg);
-    color: var(--muted);
+    --chip-dot: var(--color-not-started);
+    background: var(--chip-fill);
+    color: var(--chip-ink);
     white-space: nowrap;
   }
+  .dt-cal-team-prog::before {
+    content: "";
+    flex: none;
+    width: 0.55em; /* em so the dot grows with the text-size slider */
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--chip-dot);
+  }
   .dt-cal-team-prog[data-c="in progress"] {
-    background: var(--color-in-progress);
-    color: #fff;
+    --chip-dot: var(--color-in-progress);
   }
   .dt-cal-team-prog[data-c="done!"] {
-    background: var(--color-done);
-    color: #fff;
+    --chip-dot: var(--color-done);
   }
 
   /* ---- calendar assignment list (right of the calendar) ---- */
@@ -2794,23 +2829,32 @@ body.theme-dark .dex-cell.undiscovered img {
     color: var(--caltasks-info-color, inherit);
   }
   .ci-prog {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55em;
     font-size: var(--app-text);
     font-weight: 500;
-    padding: 1px 8px; /* tight vertically so the pill isn't taller than its text needs */
+    padding: 1px 9px; /* tight vertically so the pill isn't taller than its text needs */
     line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
     border-radius: 999px;
-    text-align: center;
     justify-self: start;
-    background: var(--input-bg);
-    color: var(--muted);
+    --chip-dot: var(--color-not-started);
+    background: var(--chip-fill);
+    color: var(--chip-ink);
+  }
+  .ci-prog::before {
+    content: "";
+    flex: none;
+    width: 0.55em; /* em so the dot grows with the text-size slider */
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--chip-dot);
   }
   .ci-prog[data-c="in progress"] {
-    background: var(--color-in-progress);
-    color: #fff;
+    --chip-dot: var(--color-in-progress);
   }
   .ci-prog[data-c="done!"] {
-    background: var(--color-done);
-    color: #fff;
+    --chip-dot: var(--color-done);
   }
   .ci-del {
     border: none;

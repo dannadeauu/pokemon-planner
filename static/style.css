@@ -12,9 +12,6 @@
   --color-not-started: #d9dade;
   --color-in-progress: #c9a876;
   --color-done: #6f8f52;
-  /* Tied to --color-not-started's default light background, not the page
-     theme, so it stays legible even if the page is switched to dark mode. */
-  --not-started-text: #55565c;
 }
 
 body.theme-dark {
@@ -308,31 +305,52 @@ h1 {
   outline: none;
 }
 
+/* ---- progress chips ----
+   A solid dot in the selected status color, on a light tint of that same color,
+   with text darkened from it. Only --chip-dot is set per status; the fill and
+   ink derive from it, so the settings swatches still drive the whole chip. */
 .status-select {
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
-  padding: 9px 14px;
+  padding: 9px 14px 9px 1.85em; /* left inset in em so it tracks the dot below */
   border-radius: 999px; /* fully round — clamps to half the height at any pill size */
   border: none;
-  color: white;
   appearance: none;
   -webkit-appearance: none;
-  text-align: center;
-  text-align-last: center;
+  text-align: left;
+  text-align-last: left;
+  --chip-dot: var(--color-not-started);
+  --chip-fill: color-mix(in srgb, var(--chip-dot) 25%, #fff);
+  --chip-ink: color-mix(in srgb, var(--chip-dot) 60%, #000);
+  background-color: var(--chip-fill);
+  /* A <select> is a replaced element, so ::before never renders inside it — the
+     dot has to be painted as a background instead. The soft 0.25→0.29em stop is
+     what keeps the circle's edge from aliasing. */
+  background-image: radial-gradient(circle at 1em 50%, var(--chip-dot) 0 0.25em, transparent 0.29em);
+  background-repeat: no-repeat;
+  color: var(--chip-ink);
 }
 
-.status-select[data-status="not started"] {
-  background: var(--color-not-started);
-  color: var(--not-started-text);
+/* On a dark page the tint has to go the other way — toward the card, not white. */
+body.theme-dark .status-select {
+  --chip-fill: color-mix(in srgb, var(--chip-dot) 30%, var(--card));
+  --chip-ink: color-mix(in srgb, var(--chip-dot) 72%, #fff);
 }
 
 .status-select[data-status="in progress"] {
-  background: var(--color-in-progress);
+  --chip-dot: var(--color-in-progress);
 }
 
 .status-select[data-status="done!"] {
-  background: var(--color-done);
+  --chip-dot: var(--color-done);
+}
+
+/* The open dropdown is a plain list, not a chip — keep it on normal page colors
+   instead of inheriting the tinted fill/ink. */
+.status-select option {
+  background: var(--card);
+  color: var(--text);
 }
 
 .sprite {
