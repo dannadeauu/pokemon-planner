@@ -525,6 +525,13 @@ function applyFont() {
       document.documentElement.style.removeProperty(varName);
     }
   };
+  // The spotify player is pinned to Notion Default and ignores the picker, so
+  // load that face even when the page is using something else (see .dt-splayer
+  // in style.css).
+  const spFont = appFontByLabel("Notion Default");
+  ensureFontLoaded(spFont);
+  document.documentElement.style.setProperty("--sp-locked-font", spFont.stack);
+
   setRoleFont("--font-heading", settings.fontHeading);
   setRoleFont("--font-clock", settings.fontClock);
   // variable-font axes for the clock (width/weight/optical-size); re-fit plain mode
@@ -4849,9 +4856,10 @@ function applyPageRadius() {
   document.documentElement.style.setProperty("--page-radius-scale", String(pageRadiusScale()));
 }
 
-// Task text size (text tab). Scales the task-name text across the main list, the
-// calendar-side team list, and the habit-tracker tasks via --task-text-scale.
-// 1 = design default (16px).
+// Text size (text tab). Scales every piece of body text on the page via
+// --task-text-scale, which --app-text in style.css multiplies into each
+// font-size. The page header and the spotify player opt out by keeping their
+// own fixed sizes. 1 = design default (13px).
 function taskTextScale() {
   return typeof deviceStyle.taskTextScale === "number" ? deviceStyle.taskTextScale : 1;
 }
