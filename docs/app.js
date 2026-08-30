@@ -464,6 +464,14 @@ const APP_FONTS = [
   // real system SF Pro where present, but Roboto Flex gives the condensed look on
   // every device. Only meaningful for the clock role.
   { label: "SF Pro", stack: "'Roboto Flex', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif", google: "Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000", variation: "'wght' 450, 'wdth' 30, 'opsz' 144" },
+  // Notion's three page fonts (Default / Serif / Mono). Notion's own faces are
+  // licensed and not downloadable, so each stack names the real face first (in
+  // case a device has it) and falls back to the closest free equivalent: Inter
+  // *is* Notion's sans, Source Serif 4 stands in for Lyon Text, and IBM Plex
+  // Mono is what iA Writer Mono is derived from.
+  { label: "Notion Default", stack: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", google: "Inter:wght@400;500;600;700;800" },
+  { label: "Notion Serif", stack: "'Lyon Text', 'Source Serif 4', Georgia, ui-serif, serif", google: "Source+Serif+4:wght@400;500;600;700" },
+  { label: "Notion Mono", stack: "'iA Writer Mono', 'Nitti', 'IBM Plex Mono', Menlo, Consolas, monospace", google: "IBM+Plex+Mono:wght@400;500;600;700" },
 ];
 
 function appFontByLabel(label) {

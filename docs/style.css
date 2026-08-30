@@ -313,7 +313,7 @@ h1 {
   font-size: 13px;
   font-weight: 700;
   padding: 9px 14px;
-  border-radius: 20px;
+  border-radius: 4px; /* notion-style tag corners, not a full pill */
   border: none;
   color: white;
   appearance: none;
