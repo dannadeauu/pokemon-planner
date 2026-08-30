@@ -5832,6 +5832,181 @@ function captureEditSelection() {
   return { range: sel.getRangeAt(0).cloneRange(), editable };
 }
 
+// Bold needs its own toggle. The title, the section headings and the habit
+// labels are all bold by default, so document.execCommand("bold") always reads
+// "this is already bold": it can never turn bold *on*, and engines disagree on
+// whether (and how) it turns it off. So set the weight on the selection
+// explicitly - press once to un-bold, press again to bring the bold back.
+const BOLD_MIN = 600; // a computed font-weight at or above this reads as bold
+
+function weightOf(v) {
+  if (v === "normal") return 400;
+  if (v === "bold") return 700;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+// The weight the editable itself is styled at, i.e. what "bold" restores to.
+function baseWeight(editable) {
+  const w = weightOf(getComputedStyle(editable).fontWeight);
+  return w && w >= BOLD_MIN ? w : 700;
+}
+
+// A span we added ourselves: it carries a font-weight and nothing else, so it's
+// safe to retune or unwrap without losing any other formatting.
+function isWeightSpan(el) {
+  return Boolean(el && el.tagName === "SPAN" && el.style.fontWeight && el.style.length === 1);
+}
+
+// Every non-blank text node the range touches.
+function rangeTextNodes(range) {
+  const root = range.commonAncestorContainer;
+  if (root.nodeType === 3) return [root];
+  const nodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = walker.nextNode())) {
+    if (range.intersectsNode(n) && n.textContent.trim()) nodes.push(n);
+  }
+  return nodes;
+}
+
+// Bold only when the whole selection renders bold; a mixed selection counts as
+// not-bold, so one press makes all of it bold (the usual editor behaviour).
+function rangeIsBold(range) {
+  const nodes = rangeTextNodes(range);
+  if (!nodes.length) return false;
+  return nodes.every((n) => {
+    const el = n.parentElement;
+    return Boolean(el) && (weightOf(getComputedStyle(el).fontWeight) || 400) >= BOLD_MIN;
+  });
+}
+
+// When the range is exactly one of our own weight spans, retune that span
+// instead of wrapping a new one around it. "Exactly" means none of the span's
+// text is left outside the range - comparing boundary points directly doesn't
+// work here, since (span, 0) and (its text node, 0) are the same position but
+// don't compare equal.
+function weightSpanExactlyCovering(range) {
+  const node = range.commonAncestorContainer;
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  if (!isWeightSpan(el)) return null;
+  const before = document.createRange();
+  before.selectNodeContents(el);
+  before.setEnd(range.startContainer, range.startOffset);
+  const after = document.createRange();
+  after.selectNodeContents(el);
+  after.setStart(range.endContainer, range.endOffset);
+  return before.toString() === "" && after.toString() === "" ? el : null;
+}
+
+function setRangeWeight(range, weight) {
+  const host = weightSpanExactlyCovering(range);
+  if (host) {
+    host.style.fontWeight = weight;
+    return;
+  }
+  const frag = range.extractContents();
+  // clear any weight already baked into the selection so the new one wins
+  frag.querySelectorAll("[style*='font-weight']").forEach((el) => (el.style.fontWeight = "")); // tidyWeightSpans sweeps up any span this empties out
+  frag.querySelectorAll("b, strong").forEach((el) => el.replaceWith(...el.childNodes));
+  const span = document.createElement("span");
+  span.style.fontWeight = weight;
+  span.appendChild(frag);
+  range.insertNode(span);
+}
+
+// Without this, toggling would leave a nested span per press. Drop the markup
+// that no longer does anything: wrappers left holding no text at all, a span
+// whose only child overrides it, and any span restating the weight it would
+// have inherited anyway.
+function tidyFormatting(editable) {
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    // re-wrapping part of a formatted run strands empty wrappers behind it
+    for (const el of [...editable.querySelectorAll("span, b, strong, i, em, u, font")]) {
+      if (el.isConnected && !el.textContent) {
+        el.remove();
+        changed = true;
+      }
+    }
+    for (const span of [...editable.querySelectorAll("span")]) {
+      if (!span.isConnected) continue;
+      // a span left carrying no styling of its own is just noise
+      if (span.style.length === 0 && [...span.attributes].every((a) => a.name === "style")) {
+        span.replaceWith(...span.childNodes);
+        changed = true;
+        continue;
+      }
+      if (!isWeightSpan(span)) continue;
+      if (span.childNodes.length === 1 && isWeightSpan(span.firstElementChild)) {
+        span.replaceWith(span.firstElementChild);
+        changed = true;
+        continue;
+      }
+      const parent = span.parentElement;
+      if (parent && weightOf(span.style.fontWeight) === weightOf(getComputedStyle(parent).fontWeight)) {
+        span.replaceWith(...span.childNodes);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  editable.normalize();
+}
+
+// Where the range sits as plain-text character offsets, so the same stretch can
+// be re-selected after the markup around it is rewritten.
+function textOffsets(editable, range) {
+  const pre = document.createRange();
+  pre.selectNodeContents(editable);
+  pre.setEnd(range.startContainer, range.startOffset);
+  const start = pre.toString().length;
+  return { start, end: start + range.toString().length };
+}
+
+function rangeFromOffsets(editable, off) {
+  const range = document.createRange();
+  range.selectNodeContents(editable);
+  const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT);
+  let pos = 0;
+  let started = false;
+  let n;
+  while ((n = walker.nextNode())) {
+    const next = pos + n.length;
+    if (!started && off.start <= next) {
+      range.setStart(n, off.start - pos);
+      started = true;
+    }
+    if (started && off.end <= next) {
+      range.setEnd(n, off.end - pos);
+      break;
+    }
+    pos = next;
+  }
+  return range;
+}
+
+function toggleBold() {
+  if (!editFmtRange) return;
+  const { range, editable } = editFmtRange;
+  editable.focus();
+  const sel = document.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  const live = sel.getRangeAt(0);
+  const off = textOffsets(editable, live);
+  setRangeWeight(live, rangeIsBold(live) ? "normal" : String(baseWeight(editable)));
+  tidyFormatting(editable);
+  // keep the same text highlighted so it can be toggled straight back
+  const restored = rangeFromOffsets(editable, off);
+  sel.removeAllRanges();
+  sel.addRange(restored);
+  editFmtRange = { range: restored.cloneRange(), editable };
+  saveRichText(editable);
+  updateFmtSelectionUI();
+}
+
 function updateFmtSelectionUI() {
   const menu = document.getElementById("dt-edit-menu");
   if (!menu) return;
@@ -5839,8 +6014,10 @@ function updateFmtSelectionUI() {
   const b = document.getElementById("fmt-bold");
   const it = document.getElementById("fmt-italic");
   const u = document.getElementById("fmt-underline");
+  // bold reads the selection's real weight (see toggleBold); italic / underline
+  // aren't on by default, so execCommand's own state is right for those
+  if (b) b.classList.toggle("active", Boolean(editFmtRange) && rangeIsBold(editFmtRange.range));
   try {
-    if (b) b.classList.toggle("active", document.queryCommandState("bold"));
     if (it) it.classList.toggle("active", document.queryCommandState("italic"));
     if (u) u.classList.toggle("active", document.queryCommandState("underline"));
   } catch (e) {
@@ -5886,6 +6063,7 @@ function applyFmt(fn) {
   if (s.rangeCount && !s.isCollapsed) {
     editFmtRange = { range: s.getRangeAt(0).cloneRange(), editable };
   }
+  updateFmtSelectionUI();
 }
 
 function initEditMenu() {
@@ -5976,7 +6154,7 @@ function initEditMenu() {
     if (!b) return;
     b.addEventListener("mousedown", (e) => e.preventDefault());
   });
-  if (bold) bold.addEventListener("click", () => applyFmt(() => document.execCommand("bold")));
+  if (bold) bold.addEventListener("click", toggleBold);
   if (italic) italic.addEventListener("click", () => applyFmt(() => document.execCommand("italic")));
   if (underline) underline.addEventListener("click", () => applyFmt(() => document.execCommand("underline")));
   if (color) {
