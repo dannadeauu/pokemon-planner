@@ -178,7 +178,7 @@ h1 {
 .date-text {
   text-align: center;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   margin: 0;
 }
@@ -186,7 +186,7 @@ h1 {
 .progress-text {
   text-align: center;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   margin: 0 0 9px;
 }
@@ -201,7 +201,7 @@ h1 {
   flex: 1;
   min-width: 0; /* allow the bar to shrink with its widget instead of holding an intrinsic min width */
   padding: 14px 16px;
-  font-size: 16px;
+  font-size: 13px;
   font-family: inherit;
   border: none;
   border-radius: calc(14px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
@@ -215,7 +215,7 @@ h1 {
 
 .add-row button {
   padding: 14px 22px;
-  font-size: 16px;
+  font-size: 13px;
   font-family: inherit;
   border: none;
   border-radius: calc(14px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
@@ -281,7 +281,7 @@ h1 {
 
 .todo-item .text {
   flex: 1;
-  font-size: calc(16px * var(--task-text-scale, 1)); /* "task text size" slider (text tab) */
+  font-size: calc(13px * var(--task-text-scale, 1)); /* "task text size" slider (text tab) */
   font-weight: 500;
   word-break: break-word;
 }
@@ -294,7 +294,7 @@ h1 {
 .edit-input {
   flex: 1;
   font-family: inherit;
-  font-size: calc(16px * var(--task-text-scale, 1)); /* match .todo-item .text so editing keeps the chosen size */
+  font-size: calc(13px * var(--task-text-scale, 1)); /* match .todo-item .text so editing keeps the chosen size */
   font-weight: 500;
   border: none;
   border-bottom: 2px solid var(--color-add);
@@ -379,7 +379,7 @@ h1 {
   background: transparent;
   color: var(--muted);
   opacity: 0.4;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   padding: 4px 2px 4px 6px;
 }
@@ -388,7 +388,7 @@ h1 {
   text-align: center;
   color: var(--muted);
   padding: 40px 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .add-wrap {
@@ -485,14 +485,14 @@ h1 {
 
 .settings-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 13px;
 }
 
 .settings-close {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 20px;
+  font-size: 13px;
   line-height: 1;
   padding: 4px 8px;
 }
@@ -512,7 +512,7 @@ h1 {
   background: transparent;
   color: var(--muted);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   padding: 6px 12px;
   border-radius: 999px;
@@ -558,7 +558,7 @@ h1 {
   color: var(--text);
   font-family: inherit;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .theme-btn.active {
@@ -572,7 +572,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   padding: 8px 0;
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .color-row input[type="color"] {
@@ -587,7 +587,7 @@ h1 {
 .companion-select {
   width: 100%;
   padding: 12px 14px;
-  font-size: 15px;
+  font-size: 13px;
   font-family: inherit;
   border-radius: 12px;
   border: 2px solid var(--border);
@@ -637,7 +637,7 @@ h1 {
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 19px;
+  font-size: 13px;
   line-height: 1;
   padding: 6px 8px;
   cursor: pointer;
@@ -675,7 +675,7 @@ h1 {
   align-items: flex-start;
   gap: 8px;
   margin: 0 0 12px;
-  font-size: 21px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   line-height: 1.15;
@@ -684,7 +684,7 @@ h1 {
 
 .pokedex-registered {
   margin: 0 0 14px;
-  font-size: 24px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.15;
   padding-right: 24px;
@@ -699,7 +699,7 @@ h1 {
 }
 
 .pokedex-info {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -711,7 +711,7 @@ h1 {
 
 .pokedex-desc {
   margin: 14px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
   text-transform: lowercase;
 }
@@ -722,7 +722,7 @@ h1 {
 
 .pokedex-stats h3 {
   margin: 0 0 6px;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -821,7 +821,7 @@ h1 {
 .friends-intro {
   margin: 0 0 20px;
   text-align: center;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -834,7 +834,7 @@ h1 {
   background: var(--color-add);
   color: white;
   font-family: inherit;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -851,7 +851,7 @@ h1 {
 #friends-account-view input {
   width: 100%;
   padding: 14px 16px;
-  font-size: 16px;
+  font-size: 13px;
   font-family: inherit;
   border: none;
   border-radius: 14px;
@@ -918,13 +918,13 @@ h1 {
 .dev-note-title {
   margin: 0 0 12px;
   text-align: center;
-  font-size: 19px;
+  font-size: 13px;
   font-weight: 800;
 }
 
 .dev-note-body {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
 }
@@ -934,7 +934,7 @@ h1 {
   align-items: center;
   gap: 4px;
   margin: 0 0 18px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -990,7 +990,7 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1008,7 +1008,7 @@ h1 {
   height: 34px;
   border: none;
   border-radius: 10px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -1048,7 +1048,7 @@ h1 {
   background: transparent;
   color: var(--muted);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   padding: 0;
   margin-bottom: 14px;
@@ -1080,7 +1080,7 @@ h1 {
 .account-email {
   margin: 0 0 10px;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
 }
@@ -1131,7 +1131,7 @@ h1 {
 .park-my-title {
   margin: 0 0 10px;
   text-align: center;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1231,7 +1231,7 @@ h1 {
   border-radius: 12px;
   background: #202127;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
   text-align: center;
@@ -1268,7 +1268,7 @@ h1 {
 
 .bubble-task {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   opacity: 0.85;
 }
@@ -1282,7 +1282,7 @@ h1 {
 }
 
 .friends-toggle-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1334,7 +1334,7 @@ h1 {
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1348,7 +1348,7 @@ h1 {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   padding: 4px 6px;
 }
@@ -1364,7 +1364,7 @@ h1 {
 .park-empty {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -1417,14 +1417,14 @@ h1 {
 .friends-empty-text {
   margin: 0 0 12px;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
 }
 
 .friends-code-value {
   margin: 4px 0 0;
-  font-size: 22px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 1px;
 }
@@ -1458,7 +1458,7 @@ h1 {
 
 .dex-title {
   text-align: center;
-  font-size: 26px;
+  font-size: 13px;
   font-weight: 700;
   margin: 0 0 14px;
   flex-shrink: 0;
@@ -1482,7 +1482,7 @@ h1 {
   background: var(--input-bg);
   color: var(--text);
   font-family: inherit;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   opacity: 0.55;
 }
@@ -1532,7 +1532,7 @@ h1 {
 }
 
 .dex-cell .dex-num {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -1581,7 +1581,7 @@ body.theme-dark .dex-cell.undiscovered img {
   border-radius: 10px;
   padding: 7px 10px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   background: var(--input-bg);
   color: var(--text);
@@ -1913,7 +1913,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
 
   .dt-h2 {
-    font-size: 22px;
+    font-size: 13px;
     font-weight: 700;
     margin: 0 0 12px;
     color: var(--dt-heading, inherit); /* "headings" swatch (page-edit text tab) */
@@ -2006,7 +2006,7 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--habit-daylabel-color, var(--text)); /* habit "day labels" swatch */
   }
@@ -2099,7 +2099,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .habit-check-label {
     flex: 1;
     min-width: 0;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #fff;
     outline: none;
@@ -2229,7 +2229,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-clock-plain-num {
     white-space: nowrap;
-    font-size: 48px; /* seed; fitClockPlain overrides to fill the frame */
+    font-size: 13px; /* seed; fitClockPlain overrides to fill the frame */
     font-weight: 800;
     letter-spacing: 1px;
     /* trim the font's leading so the digits' cap-to-baseline ink hugs the frame
@@ -2297,7 +2297,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: calc(16px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
     padding: 14px 0;
     text-align: center;
-    font-size: 46px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 1px;
     font-family: var(--font-clock, inherit); /* "clock font" (text tab) */
@@ -2310,7 +2310,7 @@ body.theme-dark .dex-cell.undiscovered img {
     position: absolute;
     top: 8px;
     left: 12px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 1px;
     opacity: 0.7;
@@ -2329,7 +2329,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 12px;
     padding: 12px 16px;
     font-family: inherit;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text);
     background: var(--dt-btn-primary, var(--input-bg));
@@ -2381,7 +2381,7 @@ body.theme-dark .dex-cell.undiscovered img {
     justify-content: center;
     height: 100%;
     color: var(--muted);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
   }
   .dt-embed-controls {
@@ -2400,7 +2400,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 9px;
     padding: 6px 10px;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: #fff;
     background: rgba(0, 0, 0, 0.42);
@@ -2507,7 +2507,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--input-bg);
   }
   .pl-item span {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     line-height: 1.2;
     overflow: hidden;
@@ -2582,7 +2582,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border: 1px solid rgba(255, 255, 255, 0.28);
   }
   .dt-cal-month {
-    font-size: 20px;
+    font-size: 13px;
     font-weight: 800;
     margin: 0 0 14px;
     display: flex;
@@ -2602,7 +2602,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: transparent;
     color: var(--cal-month-color, inherit); /* match the calendar month heading ("month text" swatch) */
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     padding: 4px 12px;
     border-radius: 999px;
@@ -2620,7 +2620,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-cal-dow {
     text-align: center;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--cal-dow-color, var(--muted));
     padding-bottom: 4px;
@@ -2648,7 +2648,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-cal-daynum {
     align-self: flex-end;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--cal-num-color, var(--muted));
     margin-bottom: 4px;
@@ -2671,7 +2671,7 @@ body.theme-dark .dex-cell.undiscovered img {
     overflow: hidden;
   }
   .dt-cal-chip {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
     padding: 3px 6px;
@@ -2694,7 +2694,7 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1;
   }
   .dt-cal-team-prog {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 400;
     padding: 2px 10px; /* tight vertically so the pill isn't taller than its text needs */
     line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
@@ -2722,14 +2722,14 @@ body.theme-dark .dex-cell.undiscovered img {
     display: grid;
     grid-template-columns: 1.6fr 1fr 1fr 22px;
     gap: 8px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--caltasks-label-color, var(--muted));
     padding: 0 8px 8px;
   }
   .dt-cal-list-empty {
     color: var(--caltasks-label-color, var(--muted));
-    font-size: 14px;
+    font-size: 13px;
     text-align: center;
     padding: 24px 0;
   }
@@ -2743,7 +2743,7 @@ body.theme-dark .dex-cell.undiscovered img {
     padding: 10px 8px;
     margin-bottom: 8px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
   }
   /* item glass rides on the persistent #dt-cal-tasks box (items are re-rendered) */
   .dt-cal-tasks.caltasks-item-glass .dt-cal-item {
@@ -2774,7 +2774,7 @@ body.theme-dark .dex-cell.undiscovered img {
     color: var(--caltasks-info-color, inherit);
   }
   .ci-prog {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 400;
     padding: 1px 8px; /* tight vertically so the pill isn't taller than its text needs */
     line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
@@ -2796,7 +2796,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border: none;
     background: transparent;
     color: var(--muted);
-    font-size: 15px;
+    font-size: 13px;
     cursor: pointer;
     padding: 0;
   }
@@ -2824,7 +2824,7 @@ body.theme-dark .dex-cell.undiscovered img {
     color: var(--muted);
   }
   .dt-pop-label {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--muted);
     margin-top: 2px;
@@ -2838,7 +2838,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--input-bg);
     color: var(--text);
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     padding: 9px 10px;
   }
   .dt-cal-popup textarea {
@@ -2856,7 +2856,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 10px;
     padding: 9px;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
   }
@@ -2891,12 +2891,12 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-class-title {
     margin: 0 0 14px;
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 800;
   }
   .dt-class-empty {
     color: var(--muted);
-    font-size: 14px;
+    font-size: 13px;
     margin: 0 0 12px;
   }
   .dt-class-row {
@@ -2922,14 +2922,14 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--input-bg);
     color: var(--text);
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     padding: 9px 10px;
   }
   .dt-class-del {
     border: none;
     background: transparent;
     color: var(--muted);
-    font-size: 16px;
+    font-size: 13px;
     cursor: pointer;
   }
   .dt-class-add,
@@ -2939,7 +2939,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 10px;
     padding: 10px;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
     margin-top: 6px;
@@ -2994,7 +2994,7 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 17px;
+    font-size: 13px;
     font-weight: 700;
     margin: 20px 0 8px;
   }
@@ -3047,7 +3047,7 @@ body.theme-dark .dex-cell.undiscovered img {
   border-radius: 12px;
   background: var(--input-bg);
   color: var(--text);
-  font-size: 17px;
+  font-size: 13px;
   padding: 12px 14px;
   text-align: left;
   cursor: pointer;
@@ -3075,7 +3075,7 @@ body.theme-dark .dex-cell.undiscovered img {
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 19px;
+  font-size: 13px;
   text-align: left;
   padding: 10px 12px;
   border-radius: 9px;
@@ -3112,7 +3112,7 @@ body.theme-dark .dex-cell.undiscovered img {
   background: var(--input-bg);
   color: var(--text);
   font-family: inherit;
-  font-size: 16px;
+  font-size: 13px;
   padding: 12px 14px;
 }
 .companion-search::placeholder {
@@ -3154,7 +3154,7 @@ body.theme-dark .dex-cell.undiscovered img {
   image-rendering: pixelated;
 }
 .companion-cell span {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-align: center;
   line-height: 1.15;
@@ -3323,7 +3323,7 @@ body.theme-dark .dex-cell.undiscovered img {
     cursor: grabbing;
   }
   .dt-edit-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
   }
   .dt-edit-done {
@@ -3331,7 +3331,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: rgba(255, 255, 255, 0.22);
     color: #fff;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     padding: 5px 12px;
     border-radius: 999px;
@@ -3378,7 +3378,7 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1;
   }
   .dt-wacc-onoff {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
     width: 22px;
     height: 22px;
@@ -3396,7 +3396,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-color: var(--color-add);
   }
   .dt-wacc-caret {
-    font-size: 10px;
+    font-size: 13px;
     color: var(--muted);
     transition: transform 0.15s;
   }
@@ -3417,7 +3417,7 @@ body.theme-dark .dex-cell.undiscovered img {
   }
   .dt-wc-rowlabel {
     flex-basis: 100%;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
   }
@@ -3425,7 +3425,7 @@ body.theme-dark .dex-cell.undiscovered img {
      dropdown opens in-flow (pushing content) instead of as an absolute overlay
      that would be cut off. */
   .dt-edit-body .font-btn {
-    font-size: 15px;
+    font-size: 13px;
     padding: 9px 12px;
   }
   .dt-edit-body .font-menu {
@@ -3438,7 +3438,7 @@ body.theme-dark .dex-cell.undiscovered img {
     margin-top: 2px;
   }
   .dt-edit-label {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -3480,7 +3480,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: var(--input-bg);
     color: var(--text);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     padding: 7px 10px;
     border-radius: 10px;
@@ -3522,7 +3522,7 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
   }
@@ -3539,7 +3539,7 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
   }
@@ -3550,7 +3550,7 @@ body.theme-dark .dex-cell.undiscovered img {
     flex: 1;
     min-width: 0;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     padding: 7px 9px;
     border-radius: 8px;
     border: 1px solid var(--border);
@@ -3571,7 +3571,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: transparent;
     color: var(--text);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
     transition: border-color 0.12s, color 0.12s;
@@ -3666,7 +3666,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-radius: 9px;
     background: var(--input-bg);
     color: var(--text);
-    font-size: 16px;
+    font-size: 13px;
     font-family: inherit;
     cursor: pointer;
     display: flex;
@@ -3701,7 +3701,7 @@ body.theme-dark .dex-cell.undiscovered img {
     pointer-events: none;
   }
   .dt-edit-hint {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--muted);
     font-weight: 600;
   }
@@ -3750,7 +3750,7 @@ body.theme-dark .dex-cell.undiscovered img {
     background: transparent;
     color: var(--muted);
     font-family: inherit;
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 800;
     padding: 7px 4px;
     border-radius: 8px 8px 0 0;
@@ -3790,7 +3790,7 @@ body.theme-dark .dex-cell.undiscovered img {
     border-color: var(--color-add);
   }
   .dt-widget-toggle .wt-check {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 800;
   }
   input[type="range"].dt-widget-gap {
@@ -4169,7 +4169,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-wc-label {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
@@ -4181,7 +4181,7 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: center;
     gap: 6px;
     flex: 0 0 auto;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
     cursor: pointer;
@@ -4195,7 +4195,7 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-wc-select {
     flex: 0 0 auto;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
     background: var(--input-bg);
@@ -4209,7 +4209,7 @@ body.theme-dark .dex-cell.undiscovered img {
     align-items: center;
     gap: 6px;
     flex: 0 0 auto;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--muted);
   }
