@@ -2298,6 +2298,9 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-clock-box {
     position: relative;
     flex: 1;
+    /* the two boxes stay an even split: without this the fitted digits' min-content
+       width would let the hour box push past its half */
+    min-width: 0;
     background: var(--dt-clock, #16171a);
     color: #fff;
     border-radius: calc(16px * var(--page-radius-scale, 1)); /* page "corner rounding" slider */
@@ -2311,6 +2314,15 @@ body.theme-dark .dex-cell.undiscovered img {
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  /* the hour / minute digits: fitClockBoxes sizes them to fill their box, so trim
+     the font's leading (like the plain numbers) — the ink then spans the frame
+     instead of floating inside the line box's dead space. */
+  .dt-clock-num {
+    white-space: nowrap;
+    line-height: 1;
+    text-box-trim: trim-both;
+    text-box-edge: cap alphabetic;
   }
   .dt-ampm {
     position: absolute;

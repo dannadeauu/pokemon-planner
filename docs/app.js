@@ -536,7 +536,7 @@ function applyFont() {
   setRoleFont("--font-clock", settings.fontClock);
   // variable-font axes for the clock (width/weight/optical-size); re-fit plain mode
   document.documentElement.style.setProperty("--font-clock-fvar", clockFontVariation());
-  if (typeof fitClockPlain === "function") fitClockPlain();
+  if (typeof fitClock === "function") fitClock();
 }
 
 function loadSettings() {
@@ -7538,7 +7538,13 @@ function renderDesktopClock() {
   apEl.textContent = pm ? "PM" : "AM";
   // "plain numbers" format shows just the time, no AM/PM
   if (numEl) numEl.textContent = hrStr + ":" + mStr;
+  fitClock();
+}
+
+// Refit whichever clock layout is showing (each fitter no-ops in the other mode).
+function fitClock() {
   fitClockPlain();
+  fitClockBoxes();
 }
 
 // Size the plain numbers to fill the (possibly stretched) clock frame. Measured
@@ -7567,6 +7573,54 @@ function fitClockPlain() {
   if (resizedH && availH > 0) size = Math.min(size, (availH / h) * REF);
   numEl.style.fontSize = Math.max(12, Math.floor(size * 0.92)) + "px";
   syncClockBlendBg(); // the digits' box moved/resized -> realign the blended bg
+}
+
+// "boxes" format: size the digits to span their box, the same way fitClockPlain
+// fills the plain frame. Both boxes share ONE size (the smaller of the two fits),
+// measured against a fixed "00" so it can't jump as the minute ticks over, and the
+// hour box reserves a gutter so its digits never run under the AM/PM label.
+function fitClockBoxes() {
+  const clock = document.querySelector(".dt-clock");
+  const hEl = document.getElementById("dt-clock-h");
+  const mEl = document.getElementById("dt-clock-m");
+  const apEl = document.getElementById("dt-clock-ampm");
+  if (!clock || !hEl || !mEl) return;
+  const digits = [hEl, mEl];
+  if (settings.clockFormat === "plain") {
+    digits.forEach((el) => { el.style.fontSize = ""; });
+    hEl.style.marginLeft = "";
+    return;
+  }
+  // the AM/PM sits absolutely in the hour box's top-left corner, so hold the hour
+  // digits clear of it with a margin (12px inset + the label + a gap). A margin,
+  // not box padding: padding would widen the hour box past its flex-basis:0 half.
+  hEl.style.marginLeft = (apEl ? Math.ceil(12 + apEl.getBoundingClientRect().width + 8) : 0) + "px";
+  const avail = digits.map((el) => {
+    const box = el.closest(".dt-clock-box");
+    const cs = getComputedStyle(box);
+    const gutter = parseFloat(el.style.marginLeft) || 0;
+    return {
+      w: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - gutter,
+      h: box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
+    };
+  });
+  if (avail.some((a) => !(a.w > 0))) return;
+  const REF = 100;
+  const actual = digits.map((el) => el.textContent);
+  digits.forEach((el) => { el.textContent = "00"; el.style.fontSize = REF + "px"; });
+  const ink = digits.map((el) => ({ w: el.offsetWidth || 1, h: el.offsetHeight || 1 }));
+  digits.forEach((el, i) => { el.textContent = actual[i]; });
+  // constrain by height only once the frame has an explicit (resized) height,
+  // otherwise the auto-height boxes just follow the font and never limit it
+  const resizedH = clock.style.height && clock.style.height !== "auto" && clock.style.height !== "";
+  let size = Infinity;
+  avail.forEach((a, i) => {
+    size = Math.min(size, (a.w / ink[i].w) * REF);
+    if (resizedH && a.h > 0) size = Math.min(size, (a.h / ink[i].h) * REF);
+  });
+  const px = Math.max(12, Math.floor(size * 0.92));
+  digits.forEach((el) => { el.style.fontSize = px + "px"; });
+  syncClockBlendBg(); // the digits moved/resized -> realign the blended bg
 }
 
 // Toggle the clock between the "boxes" and "plain numbers" layouts and refresh
@@ -7771,7 +7825,7 @@ function startDesktopClock() {
   setInterval(renderDesktopClock, 15000);
   // refit whenever the frame changes size (resize drag, column reflow, …)
   if (window.ResizeObserver && !clockPlainRO) {
-    clockPlainRO = new ResizeObserver(() => { fitClockPlain(); syncClockBlendBg(); });
+    clockPlainRO = new ResizeObserver(() => { fitClock(); syncClockBlendBg(); });
     clockPlainRO.observe(clock);
   }
   window.addEventListener("resize", syncClockBlendBg);
