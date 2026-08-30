@@ -2687,7 +2687,8 @@ body.theme-dark .dex-cell.undiscovered img {
   .dt-cal-team-prog {
     font-size: 12px;
     font-weight: 700;
-    padding: 4px 10px;
+    padding: 2px 10px; /* tight vertically so the pill isn't taller than its text needs */
+    line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
     border-radius: 999px;
     background: var(--input-bg);
     color: var(--muted);
@@ -2766,7 +2767,8 @@ body.theme-dark .dex-cell.undiscovered img {
   .ci-prog {
     font-size: 12px;
     font-weight: 700;
-    padding: 3px 8px;
+    padding: 1px 8px; /* tight vertically so the pill isn't taller than its text needs */
+    line-height: 1.2; /* baloo 2's default line box is ~1.6em, which is what made these tall */
     border-radius: 999px;
     text-align: center;
     justify-self: start;
